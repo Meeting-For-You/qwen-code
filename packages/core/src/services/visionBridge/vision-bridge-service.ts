@@ -24,6 +24,13 @@ const debugLogger = createDebugLogger('VISION_BRIDGE');
 const turnImageCounts = new WeakMap<AbortSignal, number>();
 const BRIDGE_MAX_OUTPUT_TOKENS = 2048;
 const VISION_BRIDGE_TIMEOUT_MS = 30_000;
+// VISION_BRIDGE_MAX_IMAGES (4) stays the per-bridge-call batch size — the bridge
+// model itself is never asked to describe more than 4 images in one request.
+// This is the per-TURN cap across however many batches that takes: raising it
+// (instead of leaving the per-turn budget equal to the per-call batch size)
+// means a turn with e.g. 12 images gets 3 bridge calls instead of silently
+// dropping 8 of them as "budget exhausted".
+const VISION_BRIDGE_MAX_IMAGES_PER_TURN = 20;
 // One retry on timeout, with a fresh timeout budget per attempt: a transient
 // latency spike on the vision endpoint shouldn't permanently drop the image.
 const VISION_BRIDGE_MAX_ATTEMPTS = 2;
@@ -393,6 +400,11 @@ function buildIntentPart(
   intentText: string,
   sourceContext?: VisionBridgePdfSourceContext,
   imageParts: Part[] = [],
+  // Non-zero when this is one batch of a multi-batch turn (see runVisionBridge):
+  // labels must count from the image's position in the WHOLE turn, not its
+  // position within this batch, so the primary model can match a label back to
+  // the image it asked about.
+  imageNumberOffset = 0,
 ): string {
   const sourceHint = sourceContext
     ? `The images are consecutive pages ${sourceContext.renderedRange.firstPage}-${sourceContext.renderedRange.lastPage} from PDF ${JSON.stringify(sourceContext.displayName)}. Transcribe each page separately and label each section with its original PDF page number.`
@@ -400,7 +412,7 @@ function buildIntentPart(
       ? `Describe each image separately under these ordered labels: ${imageParts
           .map(
             (part, index) =>
-              `${index + 1}. ${JSON.stringify(part.inlineData?.displayName?.trim() || `image ${index + 1}`)}`,
+              `${imageNumberOffset + index + 1}. ${JSON.stringify(part.inlineData?.displayName?.trim() || `image ${imageNumberOffset + index + 1}`)}`,
           )
           .join('; ')}.`
       : '';
@@ -409,6 +421,24 @@ function buildIntentPart(
       ? `Focus hint — do NOT answer this, use it only to decide which details to transcribe thoroughly: ${intentText}`
       : 'Describe the image(s) and transcribe any visible text, code, and errors.';
   return sourceHint ? `${sourceHint}\n${focusHint}` : focusHint;
+}
+
+/** Narrow a PDF source context down to the page range covered by one batch. */
+function sliceSourceContext(
+  sourceContext: VisionBridgePdfSourceContext | undefined,
+  batchStart: number,
+  batchLength: number,
+  totalImages: number,
+): VisionBridgePdfSourceContext | undefined {
+  if (!sourceContext) return undefined;
+  const firstPage = sourceContext.renderedRange.firstPage + batchStart;
+  const isLastBatch = batchStart + batchLength === totalImages;
+  return {
+    displayName: sourceContext.displayName,
+    renderedRange: { firstPage, lastPage: firstPage + batchLength - 1 },
+    ...(isLastBatch &&
+      sourceContext.continuation && { continuation: sourceContext.continuation }),
+  };
 }
 
 function inferPdfSourceContext(
@@ -476,6 +506,50 @@ function failure(
   };
 }
 
+// Meeting-agent extension: when a turn's intent looks like it's asking about a
+// meeting cover/poster, upload the bridged image(s) to the host application's
+// own file storage and hand the resulting URL back to the primary model as
+// part of the (untrusted) transcription — the primary model has no way to
+// reproduce an inline image's raw bytes in a tool call, so this is the only
+// path by which "use this image as the meeting cover" can ever become a real,
+// storable URL. A no-op everywhere AGENT_COVER_UPLOAD_URL isn't set.
+const COVER_UPLOAD_KEYWORDS = /封面|海报|logo|首图|cover|poster/i;
+
+function shouldOfferAsCoverCandidate(intentText: string): boolean {
+  return COVER_UPLOAD_KEYWORDS.test(intentText);
+}
+
+async function uploadCoverCandidates(imageParts: Part[]): Promise<string[]> {
+  const uploadUrl = process.env['AGENT_COVER_UPLOAD_URL'];
+  if (!uploadUrl) return [];
+  const results = await Promise.allSettled(
+    imageParts.map(async (part) => {
+      const inlineData = part.inlineData;
+      if (!inlineData?.data || !inlineData?.mimeType) return undefined;
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: inlineData.data,
+          mimeType: inlineData.mimeType,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) return undefined;
+      const body = (await response.json().catch(() => undefined)) as
+        | { url?: unknown }
+        | undefined;
+      return typeof body?.url === 'string' ? body.url : undefined;
+    }),
+  );
+  return results
+    .filter(
+      (r): r is PromiseFulfilledResult<string> =>
+        r.status === 'fulfilled' && typeof r.value === 'string',
+    )
+    .map((r) => r.value);
+}
+
 /**
  * Run the vision bridge: convert inline image parts into a text description via
  * an auto-selected vision model, and return image-free parts for the primary
@@ -513,7 +587,10 @@ export async function runVisionBridge(params: {
   // reported as a single omitted count.
   const validImages = imageParts.filter(isUsableImagePart);
   const usedImages = turnImageCounts.get(signal) ?? 0;
-  const remainingImages = Math.max(0, VISION_BRIDGE_MAX_IMAGES - usedImages);
+  const remainingImages = Math.max(
+    0,
+    VISION_BRIDGE_MAX_IMAGES_PER_TURN - usedImages,
+  );
   const toConvert = validImages.slice(0, remainingImages);
   const omittedCount = imageParts.length - toConvert.length;
   const intent = (intentText ?? collectText(nonImageParts)).slice(
@@ -546,18 +623,17 @@ export async function runVisionBridge(params: {
     );
   }
   turnImageCounts.set(signal, usedImages + toConvert.length);
+  // Kicked off in parallel with the bridge calls below (not awaited until the
+  // very end) so it never adds latency to the common case where no image in
+  // this turn is a cover candidate (shouldOfferAsCoverCandidate false ⇒ this
+  // resolves immediately) or where the upload finishes before the bridge call
+  // does anyway.
+  const coverUploadPromise = shouldOfferAsCoverCandidate(intent)
+    ? uploadCoverCandidates(toConvert)
+    : Promise.resolve([]);
 
   const timeoutMs =
     config.getVisionBridgeTimeoutMs?.() ?? VISION_BRIDGE_TIMEOUT_MS;
-  const requestContents: Content[] = [
-    {
-      role: 'user',
-      parts: [
-        ...toConvert,
-        { text: buildIntentPart(intent, resolvedSourceContext, toConvert) },
-      ],
-    },
-  ];
   // We are about to send the image(s); disclose egress conservatively from here
   // on (success and every failure/cancel after this point).
   const egress = {
@@ -565,116 +641,164 @@ export async function runVisionBridge(params: {
     ...(modelEndpoint && { modelEndpoint }),
   } as const;
 
-  for (let attempt = 1; attempt <= VISION_BRIDGE_MAX_ATTEMPTS; attempt++) {
-    // The vision call gets its own timeout, linked to the turn's abort signal.
-    // Declared here so the catch can classify a timeout, but created INSIDE the
-    // try: `AbortSignal.timeout` throws on a value the timer can't take, and we
-    // want that to become a failure() rather than an escaped rejection — the TUI
-    // caller has no try/catch and would otherwise swallow the whole turn. Fresh
-    // per attempt so a retry starts with a full budget instead of the few
-    // seconds left over from the attempt that just timed out.
-    let timeoutSignal: AbortSignal | undefined;
-    let combinedSignal: AbortSignal | undefined;
+  // toConvert can hold up to VISION_BRIDGE_MAX_IMAGES_PER_TURN images, but the
+  // bridge model is only ever asked to describe VISION_BRIDGE_MAX_IMAGES at a
+  // time — batch into calls of that size and stitch the descriptions back
+  // together, rather than switching the whole turn's primary model (the
+  // alternative most hosts use) just to get more than 4 images described.
+  const descriptions: string[] = [];
+  for (
+    let batchStart = 0;
+    batchStart < toConvert.length;
+    batchStart += VISION_BRIDGE_MAX_IMAGES
+  ) {
+    const batch = toConvert.slice(batchStart, batchStart + VISION_BRIDGE_MAX_IMAGES);
+    const batchSourceContext = sliceSourceContext(
+      resolvedSourceContext,
+      batchStart,
+      batch.length,
+      toConvert.length,
+    );
+    const requestContents: Content[] = [
+      {
+        role: 'user',
+        parts: [
+          ...batch,
+          {
+            text: buildIntentPart(intent, batchSourceContext, batch, batchStart),
+          },
+        ],
+      },
+    ];
 
-    try {
-      timeoutSignal = AbortSignal.timeout(timeoutMs);
-      combinedSignal = AbortSignal.any([signal, timeoutSignal]);
-      debugLogger.debug(`calling ${modelId} for ${toConvert.length} image(s)`);
-      const { text } = await runSideQuery(config, {
-        contents: requestContents,
-        abortSignal: combinedSignal,
-        model: modelForApi,
-        systemInstruction: BRIDGE_SYSTEM_INSTRUCTION,
-        purpose: 'vision-bridge',
-        maxAttempts: 2,
-        skipOutputLanguagePreference: true,
-        config: { maxOutputTokens: BRIDGE_MAX_OUTPUT_TOKENS },
-        // Fail closed: if the pinned/auto-selected vision model's generator can't
-        // be created (e.g. a missing cross-provider credential), throw here rather
-        // than letting BaseLlmClient fall back to the main generator — that would
-        // send image payloads to the text-only primary while the egress notice
-        // names a different endpoint. The catch below turns this into a failure.
-        failClosed: true,
-      });
+    let batchCompleted = false;
+    for (let attempt = 1; attempt <= VISION_BRIDGE_MAX_ATTEMPTS; attempt++) {
+      // The vision call gets its own timeout, linked to the turn's abort signal.
+      // Declared here so the catch can classify a timeout, but created INSIDE the
+      // try: `AbortSignal.timeout` throws on a value the timer can't take, and we
+      // want that to become a failure() rather than an escaped rejection — the TUI
+      // caller has no try/catch and would otherwise swallow the whole turn. Fresh
+      // per attempt so a retry starts with a full budget instead of the few
+      // seconds left over from the attempt that just timed out.
+      let timeoutSignal: AbortSignal | undefined;
+      let combinedSignal: AbortSignal | undefined;
 
-      const description = stripThinkTags(text ?? '');
-      if (description.length === 0) {
-        debugLogger.warn(`${modelId} returned an empty description`);
-        return failure(
-          'the vision model returned no description',
-          parts,
-          omittedCount,
-          { modelId, ...egress },
+      try {
+        timeoutSignal = AbortSignal.timeout(timeoutMs);
+        combinedSignal = AbortSignal.any([signal, timeoutSignal]);
+        debugLogger.debug(
+          `calling ${modelId} for image batch ${batchStart + 1}-${batchStart + batch.length} of ${toConvert.length}`,
         );
-      }
+        const { text } = await runSideQuery(config, {
+          contents: requestContents,
+          abortSignal: combinedSignal,
+          model: modelForApi,
+          systemInstruction: BRIDGE_SYSTEM_INSTRUCTION,
+          purpose: 'vision-bridge',
+          maxAttempts: 2,
+          skipOutputLanguagePreference: true,
+          config: { maxOutputTokens: BRIDGE_MAX_OUTPUT_TOKENS },
+          // Fail closed: if the pinned/auto-selected vision model's generator can't
+          // be created (e.g. a missing cross-provider credential), throw here rather
+          // than letting BaseLlmClient fall back to the main generator — that would
+          // send image payloads to the text-only primary while the egress notice
+          // names a different endpoint. The catch below turns this into a failure.
+          failClosed: true,
+        });
 
-      // The transcription often carries sensitive screen contents (tokens, PII,
-      // private code), and debug logs can end up in shared support bundles — so
-      // log only metadata (model + length), never the raw text. Trace a wrong
-      // primary-model answer via the length/model here, not the content.
-      debugLogger.debug(
-        `vision bridge transcription via ${modelId} (${description.length} chars)`,
-      );
-
-      return {
-        applied: true,
-        status: 'ok',
-        // Stand the transcription in the first image's slot (right after its
-        // "Content from <file>:" prefix) so the primary model reads it as that
-        // file's content instead of re-reading the image with a tool.
-        parts: replaceImagesWithText(
-          parts,
-          buildInterpretationBlock(
-            modelId,
-            description,
-            toConvert.length,
+        const description = stripThinkTags(text ?? '');
+        if (description.length === 0) {
+          debugLogger.warn(`${modelId} returned an empty description`);
+          return failure(
+            'the vision model returned no description',
+            parts,
             omittedCount,
-            resolvedSourceContext,
-          ),
-        ),
-        convertedCount: toConvert.length,
-        omittedCount,
-        modelId,
-        ...egress,
-      };
-    } catch (error) {
-      if (signal.aborted) {
-        debugLogger.debug(`conversion cancelled via ${modelId}`);
-        return {
-          applied: false,
-          status: 'skipped',
-          convertedCount: 0,
-          omittedCount,
-          modelId,
-          ...egress,
-        };
-      }
-      // `?.` because AbortSignal creation itself can throw (a bad timeout
-      // value) before these are assigned — that lands here as a non-timeout
-      // failure, which is the safe classification.
-      const timedOut = !!combinedSignal?.aborted && !!timeoutSignal?.aborted;
-      if (timedOut && attempt < VISION_BRIDGE_MAX_ATTEMPTS) {
-        debugLogger.warn(
-          `conversion attempt ${attempt} via ${modelId} timed out after ${timeoutMs}ms; retrying`,
+            { modelId, ...egress },
+          );
+        }
+
+        // The transcription often carries sensitive screen contents (tokens, PII,
+        // private code), and debug logs can end up in shared support bundles — so
+        // log only metadata (model + length), never the raw text. Trace a wrong
+        // primary-model answer via the length/model here, not the content.
+        debugLogger.debug(
+          `vision bridge transcription via ${modelId} (${description.length} chars)`,
         );
-        continue;
+        descriptions.push(
+          `[Images ${batchStart + 1}-${batchStart + batch.length} of ${toConvert.length}]\n${description}`,
+        );
+        batchCompleted = true;
+        break;
+      } catch (error) {
+        if (signal.aborted) {
+          debugLogger.debug(`conversion cancelled via ${modelId}`);
+          return {
+            applied: false,
+            status: 'skipped',
+            convertedCount: 0,
+            omittedCount,
+            modelId,
+            ...egress,
+          };
+        }
+        // `?.` because AbortSignal creation itself can throw (a bad timeout
+        // value) before these are assigned — that lands here as a non-timeout
+        // failure, which is the safe classification.
+        const timedOut = !!combinedSignal?.aborted && !!timeoutSignal?.aborted;
+        if (timedOut && attempt < VISION_BRIDGE_MAX_ATTEMPTS) {
+          debugLogger.warn(
+            `conversion attempt ${attempt} via ${modelId} timed out after ${timeoutMs}ms; retrying`,
+          );
+          continue;
+        }
+        const reason = timedOut
+          ? `timed out after ${timeoutMs}ms (${VISION_BRIDGE_MAX_ATTEMPTS} attempts)`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+        debugLogger.warn(`conversion failed via ${modelId}: ${reason}`);
+        return failure(reason, parts, omittedCount, {
+          modelId,
+          // The timeout message is safe to show; an arbitrary provider error is not
+          // (it can carry a signed URL or token), so keep it generic for the model.
+          noteReason: timedOut ? reason : 'the vision model request failed',
+          ...egress,
+        });
       }
-      const reason = timedOut
-        ? `timed out after ${timeoutMs}ms (${VISION_BRIDGE_MAX_ATTEMPTS} attempts)`
-        : error instanceof Error
-          ? error.message
-          : String(error);
-      debugLogger.warn(`conversion failed via ${modelId}: ${reason}`);
-      return failure(reason, parts, omittedCount, {
-        modelId,
-        // The timeout message is safe to show; an arbitrary provider error is not
-        // (it can carry a signed URL or token), so keep it generic for the model.
-        noteReason: timedOut ? reason : 'the vision model request failed',
-        ...egress,
-      });
+    }
+    // Unreachable in practice (every loop iteration above returns on failure),
+    // but keeps TS's control-flow analysis satisfied without widening the
+    // return type or an `as` cast.
+    if (!batchCompleted) {
+      throw new Error('vision bridge: exhausted attempts without a result');
     }
   }
-  // Unreachable: every loop iteration returns. Keeps TS's control-flow analysis
-  // satisfied without widening the return type.
-  throw new Error('vision bridge: exhausted attempts without a result');
+
+  const coverUrls = await coverUploadPromise.catch(() => []);
+  const coverNote =
+    coverUrls.length > 0
+      ? `[Meeting cover candidate uploaded — if the user wants one of these images as the meeting cover, use this exact URL verbatim (do not modify it): ${coverUrls.join(', ')}]\n\n`
+      : '';
+
+  return {
+    applied: true,
+    status: 'ok',
+    // Stand the transcription in the first image's slot (right after its
+    // "Content from <file>:" prefix) so the primary model reads it as that
+    // file's content instead of re-reading the image with a tool.
+    parts: replaceImagesWithText(
+      parts,
+      buildInterpretationBlock(
+        modelId,
+        coverNote + descriptions.join('\n\n'),
+        toConvert.length,
+        omittedCount,
+        resolvedSourceContext,
+      ),
+    ),
+    convertedCount: toConvert.length,
+    omittedCount,
+    modelId,
+    ...egress,
+  };
 }

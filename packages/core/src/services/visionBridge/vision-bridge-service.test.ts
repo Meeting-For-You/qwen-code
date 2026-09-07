@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Part } from '@google/genai';
 import {
   formatVisionBridgeNoticeDisplay,
@@ -164,42 +164,48 @@ describe('runVisionBridge', () => {
     expect(sent).not.toContain('x'.repeat(2001)); // but capped at 2000 chars
   });
 
-  it('shares the four-image budget across bridge calls in one turn', async () => {
+  it('shares a twenty-image per-turn budget across bridge calls, not the four-image batch size', async () => {
     mockSideQuery.mockResolvedValue({ text: 'desc' });
     const turnSignal = signal();
+    const numbered = (count: number, offset = 0) =>
+      Array.from({ length: count }, (_, i) => image(`IMG${offset + i}`));
 
+    // 12 images in one call: batches into three 4-image bridge calls.
     const first = await runVisionBridge({
       config,
-      parts: [image('ONE'), image('TWO'), image('THREE')],
+      parts: numbered(12),
       signal: turnSignal,
     });
+    // Only 8 of the turn's 20-image budget remain (20 - 12); this call brings
+    // 10, so 2 are omitted for being over the per-turn budget, not because a
+    // single call can only hold four.
     const second = await runVisionBridge({
       config,
-      parts: [image('FOUR', 'four.png'), image('FIVE', 'five.png')],
+      parts: numbered(10, 100),
       signal: turnSignal,
     });
+    // The turn's budget is now fully spent (12 + 8 = 20).
     const exhausted = await runVisionBridge({
       config,
-      parts: [image('SIX')],
+      parts: [image('LAST')],
       signal: turnSignal,
     });
 
-    expect(first).toMatchObject({ convertedCount: 3, omittedCount: 0 });
-    expect(second).toMatchObject({ convertedCount: 1, omittedCount: 1 });
+    expect(first).toMatchObject({ convertedCount: 12, omittedCount: 0 });
+    expect(second).toMatchObject({ convertedCount: 8, omittedCount: 2 });
     expect(exhausted).toMatchObject({
       status: 'failed',
       convertedCount: 0,
       omittedCount: 1,
     });
     expect(textOf(exhausted.parts)).toMatch(/budget was exhausted/i);
-    expect(mockSideQuery).toHaveBeenCalledTimes(2);
-    const secondRequest = JSON.stringify(
-      mockSideQuery.mock.calls[1][1].contents,
+    // 12 images ⇒ 3 batches, 8 images ⇒ 2 batches, exhausted call makes none.
+    expect(mockSideQuery).toHaveBeenCalledTimes(5);
+    const lastBatchOfSecondCall = JSON.stringify(
+      mockSideQuery.mock.calls[4][1].contents,
     );
-    expect(secondRequest).toContain('FOUR');
-    expect(secondRequest).not.toContain('FIVE');
-    expect(secondRequest).toContain('four.png');
-    expect(secondRequest).not.toContain('five.png');
+    expect(lastBatchOfSecondCall).toContain('IMG106'); // second batch = IMG104..IMG107
+    expect(lastBatchOfSecondCall).not.toContain('IMG108'); // omitted: past this call's 8-image share
   });
 
   it('reports the bridge model endpoint host for cross-provider egress clarity', async () => {
@@ -443,8 +449,10 @@ describe('runVisionBridge', () => {
     expect(joined).not.toContain('reason forever');
   });
 
-  it('caps each bridge call at four images and reports the omitted count', async () => {
-    mockSideQuery.mockResolvedValue({ text: 'desc' });
+  it('batches more than four images in one call into multiple four-image bridge requests', async () => {
+    mockSideQuery
+      .mockResolvedValueOnce({ text: 'first batch description' })
+      .mockResolvedValueOnce({ text: 'second batch description' });
     const result = await runVisionBridge({
       config,
       parts: [
@@ -457,13 +465,25 @@ describe('runVisionBridge', () => {
       ],
       signal: signal(),
     });
-    expect(result.convertedCount).toBe(4);
-    expect(result.omittedCount).toBe(1); // 5 detected − 4 converted
-    expect(textOf(result.parts)).toContain('1 image(s) omitted');
-    const sent = JSON.stringify(mockSideQuery.mock.calls[0][1].contents);
-    expect(sent).toContain('FIRST');
-    expect(sent).toContain('FOURTH');
-    expect(sent).not.toContain('FIFTH');
+    // All 5 are within the 20-image per-turn budget — none dropped, just split
+    // across two 4-image (then 1-image) bridge requests.
+    expect(result.convertedCount).toBe(5);
+    expect(result.omittedCount).toBe(0);
+    expect(mockSideQuery).toHaveBeenCalledTimes(2);
+    const firstBatch = JSON.stringify(mockSideQuery.mock.calls[0][1].contents);
+    expect(firstBatch).toContain('FIRST');
+    expect(firstBatch).toContain('FOURTH');
+    expect(firstBatch).not.toContain('FIFTH');
+    const secondBatch = JSON.stringify(mockSideQuery.mock.calls[1][1].contents);
+    expect(secondBatch).toContain('FIFTH');
+    expect(secondBatch).not.toContain('FIRST');
+    // Both batches' descriptions land in the primary model's context, in order.
+    const joined = textOf(result.parts);
+    expect(joined).toContain('first batch description');
+    expect(joined).toContain('second batch description');
+    expect(joined.indexOf('first batch description')).toBeLessThan(
+      joined.indexOf('second batch description'),
+    );
   });
 
   it('strips interleaved <think> blocks without eating answer text between them', async () => {
@@ -497,7 +517,7 @@ describe('runVisionBridge', () => {
     expect(joined).not.toContain('</think>');
   });
 
-  it('counts both invalid and capped images in the omitted total', async () => {
+  it('counts invalid images in the omitted total, separately from the per-turn budget', async () => {
     mockSideQuery.mockResolvedValue({ text: 'desc' });
     const oversized = image('a'.repeat(10 * 1024 * 1024));
 
@@ -515,8 +535,10 @@ describe('runVisionBridge', () => {
       signal: signal(),
     });
 
-    expect(result.convertedCount).toBe(4);
-    expect(result.omittedCount).toBe(2); // one oversized + one over the cap
+    // All 5 valid images fit well within the 20-image per-turn budget; only the
+    // one oversized (invalid) image is omitted.
+    expect(result.convertedCount).toBe(5);
+    expect(result.omittedCount).toBe(1);
   });
 
   it('fails without calling the model when none is available', async () => {
@@ -1184,5 +1206,102 @@ describe('isFullTurnVisionCapable', () => {
         capabilities: { agent: true },
       }),
     ).toBe(true);
+  });
+});
+
+// Meeting-agent extension: when AGENT_COVER_UPLOAD_URL is configured and the
+// turn's intent looks like it's asking about a cover/poster image, the bridge
+// uploads the image(s) and hands the resulting URL back to the primary model
+// as part of the transcription (see shouldOfferAsCoverCandidate /
+// uploadCoverCandidates in vision-bridge-service.ts). This is a no-op — same
+// behavior as upstream — everywhere AGENT_COVER_UPLOAD_URL isn't set.
+describe('runVisionBridge — meeting-agent cover-upload extension', () => {
+  const originalEnv = process.env['AGENT_COVER_UPLOAD_URL'];
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env['AGENT_COVER_UPLOAD_URL'];
+    else process.env['AGENT_COVER_UPLOAD_URL'] = originalEnv;
+    global.fetch = originalFetch;
+  });
+
+  it('does nothing when AGENT_COVER_UPLOAD_URL is unset, even with a cover-ish intent', async () => {
+    delete process.env['AGENT_COVER_UPLOAD_URL'];
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    mockSideQuery.mockResolvedValue({ text: 'A conference poster' });
+
+    const result = await runVisionBridge({
+      config,
+      parts: [image()],
+      signal: signal(),
+      intentText: '这张能做会议封面吗',
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(textOf(result.parts)).not.toMatch(/cover candidate/i);
+  });
+
+  it('does not upload when the intent has nothing to do with a cover', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    mockSideQuery.mockResolvedValue({ text: 'A slide of Q3 numbers' });
+
+    await runVisionBridge({
+      config,
+      parts: [image()],
+      signal: signal(),
+      intentText: '这页数据什么意思',
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('uploads the image and prepends the resulting URL when the intent mentions a cover', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://cdn.example/meeting-for-you/cover.jpg' }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    mockSideQuery.mockResolvedValue({ text: 'A conference poster' });
+
+    const result = await runVisionBridge({
+      config,
+      parts: [image('POSTER_BYTES')],
+      signal: signal(),
+      intentText: '这张能做会议封面吗',
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:9/internal/cover-upload',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const uploadBody = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+    expect(uploadBody).toEqual({
+      imageBase64: 'POSTER_BYTES',
+      mimeType: 'image/png',
+    });
+    const joined = textOf(result.parts);
+    expect(joined).toContain('https://cdn.example/meeting-for-you/cover.jpg');
+    expect(joined).toMatch(/cover candidate/i);
+  });
+
+  it('keeps the bridge result on a successful transcription even when the upload fails', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    global.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    mockSideQuery.mockResolvedValue({ text: 'A conference poster' });
+
+    const result = await runVisionBridge({
+      config,
+      parts: [image()],
+      signal: signal(),
+      intentText: '封面用这张',
+    });
+
+    expect(result.status).toBe('ok');
+    expect(textOf(result.parts)).toContain('A conference poster');
+    expect(textOf(result.parts)).not.toMatch(/cover candidate/i);
   });
 });
