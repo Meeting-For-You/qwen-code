@@ -506,19 +506,16 @@ function failure(
   };
 }
 
-// Meeting-agent extension: when a turn's intent looks like it's asking about a
-// meeting cover/poster, upload the bridged image(s) to the host application's
-// own file storage and hand the resulting URL back to the primary model as
-// part of the (untrusted) transcription — the primary model has no way to
-// reproduce an inline image's raw bytes in a tool call, so this is the only
-// path by which "use this image as the meeting cover" can ever become a real,
-// storable URL. A no-op everywhere AGENT_COVER_UPLOAD_URL isn't set.
-const COVER_UPLOAD_KEYWORDS = /封面|海报|logo|首图|cover|poster/i;
-
-function shouldOfferAsCoverCandidate(intentText: string): boolean {
-  return COVER_UPLOAD_KEYWORDS.test(intentText);
-}
-
+// Meeting-agent extension: every image in a turn is uploaded to the host
+// application's own file storage and the resulting URL is handed back to the
+// primary model as part of the (untrusted) transcription/context — the
+// primary model has no way to reproduce an inline image's raw bytes in a tool
+// call, so this is the only path by which "use this image as the meeting
+// cover" can ever become a real, storable URL. This is unconditional (not
+// gated on the user's wording): the model is expected to judge for itself,
+// from the image content, whether it looks like a suitable meeting cover and
+// proactively offer it — most users never think to ask for this explicitly.
+// A no-op everywhere AGENT_COVER_UPLOAD_URL isn't set.
 async function uploadCoverCandidates(imageParts: Part[]): Promise<string[]> {
   const uploadUrl = process.env['AGENT_COVER_UPLOAD_URL'];
   if (!uploadUrl) return [];
@@ -551,6 +548,25 @@ async function uploadCoverCandidates(imageParts: Part[]): Promise<string[]> {
 }
 
 /**
+ * Untrusted note handed to the primary model alongside uploaded candidate
+ * URLs. Deliberately does NOT say the user asked for a cover — every image
+ * gets uploaded regardless of wording, so the model must judge from the
+ * image content itself whether one looks like a suitable meeting cover and
+ * proactively offer it, rather than waiting to be asked.
+ */
+function buildCoverCandidateNote(coverUrls: string[]): string {
+  return (
+    `[Meeting cover candidate(s) uploaded — these are NOT confirmed as the ` +
+    `meeting cover yet. Judge from the image content whether one looks like ` +
+    `a suitable meeting cover (e.g. an official notice/poster with a title, ` +
+    `date, venue, or organizer), and if so, proactively ask the user whether ` +
+    `to use it — do not wait for the user to bring it up, and do not assume ` +
+    `silence means yes. Only after the user confirms, use the exact URL ` +
+    `verbatim (do not modify it): ${coverUrls.join(', ')}]`
+  );
+}
+
+/**
  * Meeting-agent extension: same cover-upload side effect as the one inside
  * {@link runVisionBridge}, but for turns that never go through the bridge
  * because the primary model already accepts images natively. The bridge's
@@ -569,14 +585,12 @@ export async function maybeAnnotateCoverCandidates(params: {
 }): Promise<Part[]> {
   const { config, parts } = params;
   if (config.getEffectiveInputModalities?.()?.image !== true) return parts;
-  const { imageParts, nonImageParts } = splitImageParts(parts);
+  const { imageParts } = splitImageParts(parts);
   const validImages = imageParts.filter(isUsableImagePart);
   if (validImages.length === 0) return parts;
-  const intent = collectText(nonImageParts).slice(0, BRIDGE_INTENT_MAX_CHARS);
-  if (!shouldOfferAsCoverCandidate(intent)) return parts;
   const coverUrls = await uploadCoverCandidates(validImages).catch(() => []);
   if (coverUrls.length === 0) return parts;
-  const coverNote = `[Meeting cover candidate uploaded — if the user wants one of these images as the meeting cover, use this exact URL verbatim (do not modify it): ${coverUrls.join(', ')}]`;
+  const coverNote = buildCoverCandidateNote(coverUrls);
   return [...parts, { text: coverNote }];
 }
 
@@ -654,13 +668,9 @@ export async function runVisionBridge(params: {
   }
   turnImageCounts.set(signal, usedImages + toConvert.length);
   // Kicked off in parallel with the bridge calls below (not awaited until the
-  // very end) so it never adds latency to the common case where no image in
-  // this turn is a cover candidate (shouldOfferAsCoverCandidate false ⇒ this
-  // resolves immediately) or where the upload finishes before the bridge call
-  // does anyway.
-  const coverUploadPromise = shouldOfferAsCoverCandidate(intent)
-    ? uploadCoverCandidates(toConvert)
-    : Promise.resolve([]);
+  // very end) so it never adds latency in the common case where the upload
+  // finishes before the bridge call does anyway.
+  const coverUploadPromise = uploadCoverCandidates(toConvert);
 
   const timeoutMs =
     config.getVisionBridgeTimeoutMs?.() ?? VISION_BRIDGE_TIMEOUT_MS;
@@ -805,10 +815,7 @@ export async function runVisionBridge(params: {
   }
 
   const coverUrls = await coverUploadPromise.catch(() => []);
-  const coverNote =
-    coverUrls.length > 0
-      ? `[Meeting cover candidate uploaded — if the user wants one of these images as the meeting cover, use this exact URL verbatim (do not modify it): ${coverUrls.join(', ')}]\n\n`
-      : '';
+  const coverNote = coverUrls.length > 0 ? `${buildCoverCandidateNote(coverUrls)}\n\n` : '';
 
   return {
     applied: true,

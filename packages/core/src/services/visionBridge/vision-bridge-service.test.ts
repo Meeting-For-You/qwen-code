@@ -1210,12 +1210,13 @@ describe('isFullTurnVisionCapable', () => {
   });
 });
 
-// Meeting-agent extension: when AGENT_COVER_UPLOAD_URL is configured and the
-// turn's intent looks like it's asking about a cover/poster image, the bridge
-// uploads the image(s) and hands the resulting URL back to the primary model
-// as part of the transcription (see shouldOfferAsCoverCandidate /
-// uploadCoverCandidates in vision-bridge-service.ts). This is a no-op — same
-// behavior as upstream — everywhere AGENT_COVER_UPLOAD_URL isn't set.
+// Meeting-agent extension: when AGENT_COVER_UPLOAD_URL is configured, the
+// bridge uploads every image in the turn unconditionally (not gated on the
+// user's wording — most users never think to ask for this explicitly, so the
+// model is expected to judge from image content and offer proactively; see
+// uploadCoverCandidates / buildCoverCandidateNote in vision-bridge-service.ts).
+// This is a no-op — same behavior as upstream — everywhere
+// AGENT_COVER_UPLOAD_URL isn't set.
 describe('runVisionBridge — meeting-agent cover-upload extension', () => {
   const originalEnv = process.env['AGENT_COVER_UPLOAD_URL'];
   const originalFetch = global.fetch;
@@ -1226,7 +1227,7 @@ describe('runVisionBridge — meeting-agent cover-upload extension', () => {
     global.fetch = originalFetch;
   });
 
-  it('does nothing when AGENT_COVER_UPLOAD_URL is unset, even with a cover-ish intent', async () => {
+  it('does nothing when AGENT_COVER_UPLOAD_URL is unset', async () => {
     delete process.env['AGENT_COVER_UPLOAD_URL'];
     const fetchSpy = vi.fn();
     global.fetch = fetchSpy as unknown as typeof fetch;
@@ -1236,30 +1237,14 @@ describe('runVisionBridge — meeting-agent cover-upload extension', () => {
       config,
       parts: [image()],
       signal: signal(),
-      intentText: '这张能做会议封面吗',
+      intentText: 'unrelated request, nothing about a cover',
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(textOf(result.parts)).not.toMatch(/cover candidate/i);
   });
 
-  it('does not upload when the intent has nothing to do with a cover', async () => {
-    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
-    const fetchSpy = vi.fn();
-    global.fetch = fetchSpy as unknown as typeof fetch;
-    mockSideQuery.mockResolvedValue({ text: 'A slide of Q3 numbers' });
-
-    await runVisionBridge({
-      config,
-      parts: [image()],
-      signal: signal(),
-      intentText: '这页数据什么意思',
-    });
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('uploads the image and prepends the resulting URL when the intent mentions a cover', async () => {
+  it('uploads every image and prepends the resulting URLs regardless of the intent wording', async () => {
     process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
@@ -1272,7 +1257,7 @@ describe('runVisionBridge — meeting-agent cover-upload extension', () => {
       config,
       parts: [image('POSTER_BYTES')],
       signal: signal(),
-      intentText: '这张能做会议封面吗',
+      intentText: 'what is this a photo of',
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -1287,6 +1272,9 @@ describe('runVisionBridge — meeting-agent cover-upload extension', () => {
     const joined = textOf(result.parts);
     expect(joined).toContain('https://cdn.example/meeting-for-you/cover.jpg');
     expect(joined).toMatch(/cover candidate/i);
+    // The model must judge for itself and ask — the note must not claim the
+    // user already confirmed anything.
+    expect(joined).toMatch(/proactively ask/i);
   });
 
   it('keeps the bridge result on a successful transcription even when the upload fails', async () => {
@@ -1298,7 +1286,6 @@ describe('runVisionBridge — meeting-agent cover-upload extension', () => {
       config,
       parts: [image()],
       signal: signal(),
-      intentText: '封面用这张',
     });
 
     expect(result.status).toBe('ok');
@@ -1354,22 +1341,7 @@ describe('maybeAnnotateCoverCandidates', () => {
     expect(result).toBe(parts);
   });
 
-  it('does not upload when the intent has nothing to do with a cover', async () => {
-    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
-    const fetchSpy = vi.fn();
-    global.fetch = fetchSpy as unknown as typeof fetch;
-
-    const parts = [{ text: '这页数据什么意思' }, image()];
-    const result = await maybeAnnotateCoverCandidates({
-      config: nativeVisionConfig,
-      parts,
-    });
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(result).toBe(parts);
-  });
-
-  it('uploads and appends the URL as a trailing part, keeping the image intact', async () => {
+  it('uploads and appends the URL as a trailing part regardless of the intent wording, keeping the image intact', async () => {
     process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
@@ -1378,7 +1350,7 @@ describe('maybeAnnotateCoverCandidates', () => {
     global.fetch = fetchSpy as unknown as typeof fetch;
 
     const img = image('POSTER_BYTES');
-    const parts = [{ text: '这张能做会议封面吗' }, img];
+    const parts = [{ text: 'what is in this photo' }, img];
     const result = await maybeAnnotateCoverCandidates({
       config: nativeVisionConfig,
       parts,
@@ -1392,13 +1364,16 @@ describe('maybeAnnotateCoverCandidates', () => {
     expect(result).toContain(img);
     expect(textOf(result)).toContain('https://cdn.example/meeting-for-you/cover.jpg');
     expect(textOf(result)).toMatch(/cover candidate/i);
+    // The model must judge for itself and ask — the note must not claim the
+    // user already confirmed anything.
+    expect(textOf(result)).toMatch(/proactively ask/i);
   });
 
   it('returns parts unchanged when the upload fails', async () => {
     process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
     global.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
 
-    const parts = [{ text: '封面用这张' }, image()];
+    const parts = [{ text: 'unrelated text' }, image()];
     const result = await maybeAnnotateCoverCandidates({
       config: nativeVisionConfig,
       parts,
