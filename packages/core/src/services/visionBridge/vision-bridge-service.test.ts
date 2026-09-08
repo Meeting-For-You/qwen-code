@@ -16,6 +16,7 @@ import {
   selectVisionBridgeModel,
   isImageCapable,
   isFullTurnVisionCapable,
+  maybeAnnotateCoverCandidates,
   type VisionModelCandidate,
 } from './vision-bridge-service.js';
 import type { Config } from '../../config/config.js';
@@ -1303,5 +1304,106 @@ describe('runVisionBridge — meeting-agent cover-upload extension', () => {
     expect(result.status).toBe('ok');
     expect(textOf(result.parts)).toContain('A conference poster');
     expect(textOf(result.parts)).not.toMatch(/cover candidate/i);
+  });
+});
+
+// Meeting-agent extension: a model whose provider config marks it image-capable
+// (e.g. via an explicit modalities override) never goes through runVisionBridge
+// at all — it receives the real image directly. maybeAnnotateCoverCandidates is
+// the equivalent cover-upload hook for that path: it never touches the images
+// themselves (the primary model still needs them), it only appends the same
+// untrusted-URL note as a trailing text part when upload succeeds.
+describe('maybeAnnotateCoverCandidates', () => {
+  const originalEnv = process.env['AGENT_COVER_UPLOAD_URL'];
+  const originalFetch = global.fetch;
+  const nativeVisionConfig = {
+    getEffectiveInputModalities: () => ({ image: true }),
+  } as unknown as Config;
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env['AGENT_COVER_UPLOAD_URL'];
+    else process.env['AGENT_COVER_UPLOAD_URL'] = originalEnv;
+    global.fetch = originalFetch;
+  });
+
+  it('returns parts unchanged when the model does not natively accept images', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const textOnlyConfig = {
+      getEffectiveInputModalities: () => ({ image: false }),
+    } as unknown as Config;
+
+    const parts = [{ text: '这张能做会议封面吗' }, image()];
+    const result = await maybeAnnotateCoverCandidates({
+      config: textOnlyConfig,
+      parts,
+    });
+
+    expect(result).toBe(parts);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns parts unchanged when there are no images', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    const parts = [{ text: '这张能做会议封面吗' }];
+    const result = await maybeAnnotateCoverCandidates({
+      config: nativeVisionConfig,
+      parts,
+    });
+    expect(result).toBe(parts);
+  });
+
+  it('does not upload when the intent has nothing to do with a cover', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const parts = [{ text: '这页数据什么意思' }, image()];
+    const result = await maybeAnnotateCoverCandidates({
+      config: nativeVisionConfig,
+      parts,
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result).toBe(parts);
+  });
+
+  it('uploads and appends the URL as a trailing part, keeping the image intact', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://cdn.example/meeting-for-you/cover.jpg' }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const img = image('POSTER_BYTES');
+    const parts = [{ text: '这张能做会议封面吗' }, img];
+    const result = await maybeAnnotateCoverCandidates({
+      config: nativeVisionConfig,
+      parts,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:9/internal/cover-upload',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    // The image itself must still be present — this path never replaces it.
+    expect(result).toContain(img);
+    expect(textOf(result)).toContain('https://cdn.example/meeting-for-you/cover.jpg');
+    expect(textOf(result)).toMatch(/cover candidate/i);
+  });
+
+  it('returns parts unchanged when the upload fails', async () => {
+    process.env['AGENT_COVER_UPLOAD_URL'] = 'http://127.0.0.1:9/internal/cover-upload';
+    global.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const parts = [{ text: '封面用这张' }, image()];
+    const result = await maybeAnnotateCoverCandidates({
+      config: nativeVisionConfig,
+      parts,
+    });
+
+    expect(result).toBe(parts);
   });
 });

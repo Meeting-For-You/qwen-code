@@ -551,6 +551,36 @@ async function uploadCoverCandidates(imageParts: Part[]): Promise<string[]> {
 }
 
 /**
+ * Meeting-agent extension: same cover-upload side effect as the one inside
+ * {@link runVisionBridge}, but for turns that never go through the bridge
+ * because the primary model already accepts images natively. The bridge's
+ * own cover-upload only fires on the text-only path — a model marked
+ * `image: true` (e.g. a model whose provider config overrides qwen-code's
+ * built-in modality table) never calls {@link runVisionBridge} at all, so
+ * without this, "use this as the meeting cover" silently stops working the
+ * moment a model is (correctly) recognized as vision-capable. Unlike the
+ * bridge, this never touches the image parts themselves — the primary model
+ * still receives the real images — it only appends the same untrusted-URL
+ * note as a trailing text part when upload succeeds.
+ */
+export async function maybeAnnotateCoverCandidates(params: {
+  config: Pick<Config, 'getEffectiveInputModalities'>;
+  parts: Part[];
+}): Promise<Part[]> {
+  const { config, parts } = params;
+  if (config.getEffectiveInputModalities?.()?.image !== true) return parts;
+  const { imageParts, nonImageParts } = splitImageParts(parts);
+  const validImages = imageParts.filter(isUsableImagePart);
+  if (validImages.length === 0) return parts;
+  const intent = collectText(nonImageParts).slice(0, BRIDGE_INTENT_MAX_CHARS);
+  if (!shouldOfferAsCoverCandidate(intent)) return parts;
+  const coverUrls = await uploadCoverCandidates(validImages).catch(() => []);
+  if (coverUrls.length === 0) return parts;
+  const coverNote = `[Meeting cover candidate uploaded — if the user wants one of these images as the meeting cover, use this exact URL verbatim (do not modify it): ${coverUrls.join(', ')}]`;
+  return [...parts, { text: coverNote }];
+}
+
+/**
  * Run the vision bridge: convert inline image parts into a text description via
  * an auto-selected vision model, and return image-free parts for the primary
  * model.

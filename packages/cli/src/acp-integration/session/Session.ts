@@ -185,6 +185,7 @@ import {
   runVisionBridge,
   bridgeToolResultImages,
   shouldRunVisionBridge,
+  maybeAnnotateCoverCandidates,
   formatVisionBridgeNotice,
   formatFullTurnVisionNotice,
   getFullTurnVisionModelSelector,
@@ -12850,7 +12851,13 @@ export class Session implements SessionContext {
       abortSignal,
     );
     if (!hasImageParts(parts) || !shouldRunVisionBridge(this.config)) {
-      return parts;
+      // Bridge won't run — either there are no images, or the primary model
+      // already accepts them natively. In the latter case the images still
+      // need the meeting-cover check normally only performed on the bridge
+      // path (see maybeAnnotateCoverCandidates for why).
+      return hasImageParts(parts)
+        ? await maybeAnnotateCoverCandidates({ config: this.config, parts })
+        : parts;
     }
 
     const fullTurnModel = this.config.getDefaultVisionBridgeModel();
