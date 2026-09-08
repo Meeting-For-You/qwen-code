@@ -14027,10 +14027,15 @@ describe('createAcpSessionBridge', () => {
     // attachmentId (the primary model's wire format has no field for it on an
     // image block) — with no way to say "use THAT one" in a later tool call,
     // a feature like "set this attached image as the meeting cover" has
-    // nothing to reference. AGENT_ATTACHMENT_LABELING doubles as "this is a
-    // meeting-agent deployment": when set, the resolved prompt gets the id
-    // spliced back in as a plain-text label right after the image.
-    it('labels a resolved image attachment with its id when AGENT_ATTACHMENT_LABELING is set', async () => {
+    // nothing to reference. The session id is included too, not just the
+    // attachment id: a runtime can hold several concurrent sessions, and
+    // attachmentId is only unique within the session that stored it, so the
+    // id alone is ambiguous — a tool call needs both to fetch the exact
+    // right attachment rather than guessing "the most recent session".
+    // AGENT_ATTACHMENT_LABELING doubles as "this is a meeting-agent
+    // deployment": when set, the resolved prompt gets both ids spliced back
+    // in as a plain-text label right after the image.
+    it('labels a resolved image attachment with its id and session id when AGENT_ATTACHMENT_LABELING is set', async () => {
       const originalFlag = process.env['AGENT_ATTACHMENT_LABELING'];
       process.env['AGENT_ATTACHMENT_LABELING'] = '1';
       try {
@@ -14061,7 +14066,10 @@ describe('createAcpSessionBridge', () => {
 
         expect(prompts[0]?.prompt).toEqual([
           { type: 'image', data: 'AQID', mimeType: 'image/png' },
-          { type: 'text', text: `[attachment_id: ${reference.attachmentId}]` },
+          {
+            type: 'text',
+            text: `[attachment_id: ${reference.attachmentId}, session_id: ${session.sessionId}]`,
+          },
         ]);
         await bridge.shutdown();
       } finally {

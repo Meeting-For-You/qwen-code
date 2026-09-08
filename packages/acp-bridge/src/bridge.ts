@@ -312,13 +312,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // PDFs, which keep a filename). Without this, a later tool call has no way
 // to say "use THAT attachment" — the model only ever saw a bare image. This
 // splices a plain-text label right after each image that came from a chat
-// attachment, carrying the id back into the model's visible context so a
-// tool argument can name it. A no-op everywhere AGENT_ATTACHMENT_LABELING
-// isn't set — that env var doubles as "this is a meeting-agent deployment".
-// `dispatchBlocks`/`resolvedBlocks` must be the same length, index-aligned
-// (true both for resolveContent's map() and resolveContentDegrading's
-// paired retained/resolved arrays).
+// attachment, carrying the id (AND the session it was uploaded into — a
+// runtime can hold several concurrent sessions, and attachmentId is only
+// unique within one session's own store, so the id alone is ambiguous) back
+// into the model's visible context so a tool argument can name it exactly.
+// A no-op everywhere AGENT_ATTACHMENT_LABELING isn't set — that env var
+// doubles as "this is a meeting-agent deployment". `dispatchBlocks`/
+// `resolvedBlocks` must be the same length, index-aligned (true both for
+// resolveContent's map() and resolveContentDegrading's paired
+// retained/resolved arrays).
 function annotateAttachmentReferences(
+  sessionId: string,
   dispatchBlocks: readonly BridgePromptContentBlock[],
   resolvedBlocks: readonly ContentBlock[],
 ): ContentBlock[] {
@@ -336,7 +340,7 @@ function annotateAttachmentReferences(
     ) {
       out.push({
         type: 'text',
-        text: `[attachment_id: ${original.attachmentId}]`,
+        text: `[attachment_id: ${original.attachmentId}, session_id: ${sessionId}]`,
       });
     }
   }
@@ -9011,6 +9015,7 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
                 let resolvedPrompt: ContentBlock[];
                 try {
                   resolvedPrompt = annotateAttachmentReferences(
+                    sessionId,
                     dispatchBlocks,
                     await entry.attachments.resolveContent(dispatchBlocks),
                   );
@@ -9033,6 +9038,7 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
                   // marker always applies here.
                   resolvedPrompt = withAttachmentDegradationMarker(
                     annotateAttachmentReferences(
+                      sessionId,
                       perBlock.retainedBlocks,
                       perBlock.resolvedBlocks,
                     ),
