@@ -306,6 +306,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// Meeting-agent extension: resolving a SessionAttachmentReference into the
+// ContentBlock the primary model actually sees drops its attachmentId — the
+// OpenAI-compatible wire format has no field for it on an image block (unlike
+// PDFs, which keep a filename). Without this, a later tool call has no way
+// to say "use THAT attachment" — the model only ever saw a bare image. This
+// splices a plain-text label right after each image that came from a chat
+// attachment, carrying the id back into the model's visible context so a
+// tool argument can name it. A no-op everywhere AGENT_ATTACHMENT_LABELING
+// isn't set — that env var doubles as "this is a meeting-agent deployment".
+// `dispatchBlocks`/`resolvedBlocks` must be the same length, index-aligned
+// (true both for resolveContent's map() and resolveContentDegrading's
+// paired retained/resolved arrays).
+function annotateAttachmentReferences(
+  dispatchBlocks: readonly BridgePromptContentBlock[],
+  resolvedBlocks: readonly ContentBlock[],
+): ContentBlock[] {
+  if (!process.env['AGENT_ATTACHMENT_LABELING']) return [...resolvedBlocks];
+  const out: ContentBlock[] = [];
+  for (let i = 0; i < resolvedBlocks.length; i++) {
+    const resolved = resolvedBlocks[i];
+    out.push(resolved);
+    const original = dispatchBlocks[i];
+    if (
+      resolved?.type === 'image' &&
+      original &&
+      isSessionAttachmentReference(original) &&
+      original.type === 'image'
+    ) {
+      out.push({
+        type: 'text',
+        text: `[attachment_id: ${original.attachmentId}]`,
+      });
+    }
+  }
+  return out;
+}
+
 function safeTransportFailureCode(error: unknown): string | undefined {
   if (!isRecord(error)) return undefined;
   const code = error['code'];
@@ -8973,8 +9010,10 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
                 let dispatchBlocks = req.prompt;
                 let resolvedPrompt: ContentBlock[];
                 try {
-                  resolvedPrompt =
-                    await entry.attachments.resolveContent(dispatchBlocks);
+                  resolvedPrompt = annotateAttachmentReferences(
+                    dispatchBlocks,
+                    await entry.attachments.resolveContent(dispatchBlocks),
+                  );
                 } catch (error) {
                   if (
                     !isPromotedMidTurn ||
@@ -8993,7 +9032,10 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
                   // The batch resolve threw on a dead reference, so the
                   // marker always applies here.
                   resolvedPrompt = withAttachmentDegradationMarker(
-                    perBlock.resolvedBlocks,
+                    annotateAttachmentReferences(
+                      perBlock.retainedBlocks,
+                      perBlock.resolvedBlocks,
+                    ),
                   );
                 }
                 const normalized: PromptRequest = telemetry.injectPromptContext(

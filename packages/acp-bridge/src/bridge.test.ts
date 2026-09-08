@@ -14023,6 +14023,56 @@ describe('createAcpSessionBridge', () => {
       await bridge.shutdown();
     });
 
+    // Meeting-agent extension: resolving an attachment reference drops its
+    // attachmentId (the primary model's wire format has no field for it on an
+    // image block) — with no way to say "use THAT one" in a later tool call,
+    // a feature like "set this attached image as the meeting cover" has
+    // nothing to reference. AGENT_ATTACHMENT_LABELING doubles as "this is a
+    // meeting-agent deployment": when set, the resolved prompt gets the id
+    // spliced back in as a plain-text label right after the image.
+    it('labels a resolved image attachment with its id when AGENT_ATTACHMENT_LABELING is set', async () => {
+      const originalFlag = process.env['AGENT_ATTACHMENT_LABELING'];
+      process.env['AGENT_ATTACHMENT_LABELING'] = '1';
+      try {
+        const prompts: PromptRequest[] = [];
+        const bridge = makeBridge({
+          channelFactory: async () =>
+            makeChannel({
+              promptImpl: (req) => {
+                prompts.push(req);
+                return { stopReason: 'end_turn' };
+              },
+            }).channel,
+        });
+        const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
+        const reference = await bridge.storeSessionAttachment(
+          session.sessionId,
+          Uint8Array.from([1, 2, 3]),
+          'image/png',
+          { clientId: session.clientId },
+        );
+
+        await bridge.sendPrompt(
+          session.sessionId,
+          { sessionId: session.sessionId, prompt: [reference] },
+          undefined,
+          { clientId: session.clientId },
+        );
+
+        expect(prompts[0]?.prompt).toEqual([
+          { type: 'image', data: 'AQID', mimeType: 'image/png' },
+          { type: 'text', text: `[attachment_id: ${reference.attachmentId}]` },
+        ]);
+        await bridge.shutdown();
+      } finally {
+        if (originalFlag === undefined) {
+          delete process.env['AGENT_ATTACHMENT_LABELING'];
+        } else {
+          process.env['AGENT_ATTACHMENT_LABELING'] = originalFlag;
+        }
+      }
+    });
+
     it('resolves text and binary file attachment references for ACP', async () => {
       const prompts: PromptRequest[] = [];
       const bridge = makeBridge({

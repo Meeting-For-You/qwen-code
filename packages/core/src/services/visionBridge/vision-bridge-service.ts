@@ -506,94 +506,6 @@ function failure(
   };
 }
 
-// Meeting-agent extension: every image in a turn is uploaded to the host
-// application's own file storage and the resulting URL is handed back to the
-// primary model as part of the (untrusted) transcription/context — the
-// primary model has no way to reproduce an inline image's raw bytes in a tool
-// call, so this is the only path by which "use this image as the meeting
-// cover" can ever become a real, storable URL. This is unconditional (not
-// gated on the user's wording): the model is expected to judge for itself,
-// from the image content, whether it looks like a suitable meeting cover and
-// proactively offer it — most users never think to ask for this explicitly.
-// A no-op everywhere AGENT_COVER_UPLOAD_URL isn't set.
-async function uploadCoverCandidates(imageParts: Part[]): Promise<string[]> {
-  const uploadUrl = process.env['AGENT_COVER_UPLOAD_URL'];
-  if (!uploadUrl) return [];
-  const results = await Promise.allSettled(
-    imageParts.map(async (part) => {
-      const inlineData = part.inlineData;
-      if (!inlineData?.data || !inlineData?.mimeType) return undefined;
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: inlineData.data,
-          mimeType: inlineData.mimeType,
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!response.ok) return undefined;
-      const body = (await response.json().catch(() => undefined)) as
-        | { url?: unknown }
-        | undefined;
-      return typeof body?.url === 'string' ? body.url : undefined;
-    }),
-  );
-  return results
-    .filter(
-      (r): r is PromiseFulfilledResult<string> =>
-        r.status === 'fulfilled' && typeof r.value === 'string',
-    )
-    .map((r) => r.value);
-}
-
-/**
- * Untrusted note handed to the primary model alongside uploaded candidate
- * URLs. Deliberately does NOT say the user asked for a cover — every image
- * gets uploaded regardless of wording, so the model must judge from the
- * image content itself whether one looks like a suitable meeting cover and
- * proactively offer it, rather than waiting to be asked.
- */
-function buildCoverCandidateNote(coverUrls: string[]): string {
-  return (
-    `[Meeting cover candidate(s) uploaded — these are NOT confirmed as the ` +
-    `meeting cover yet. Judge from the image content whether one looks like ` +
-    `a suitable meeting cover (e.g. an official notice/poster with a title, ` +
-    `date, venue, or organizer), and if so, proactively ask the user whether ` +
-    `to use it — do not wait for the user to bring it up, and do not assume ` +
-    `silence means yes. Only after the user confirms, use the exact URL ` +
-    `verbatim (do not modify it): ${coverUrls.join(', ')}]`
-  );
-}
-
-/**
- * Meeting-agent extension: same cover-upload side effect as the one inside
- * {@link runVisionBridge}, but for turns that never go through the bridge
- * because the primary model already accepts images natively. The bridge's
- * own cover-upload only fires on the text-only path — a model marked
- * `image: true` (e.g. a model whose provider config overrides qwen-code's
- * built-in modality table) never calls {@link runVisionBridge} at all, so
- * without this, "use this as the meeting cover" silently stops working the
- * moment a model is (correctly) recognized as vision-capable. Unlike the
- * bridge, this never touches the image parts themselves — the primary model
- * still receives the real images — it only appends the same untrusted-URL
- * note as a trailing text part when upload succeeds.
- */
-export async function maybeAnnotateCoverCandidates(params: {
-  config: Pick<Config, 'getEffectiveInputModalities'>;
-  parts: Part[];
-}): Promise<Part[]> {
-  const { config, parts } = params;
-  if (config.getEffectiveInputModalities?.()?.image !== true) return parts;
-  const { imageParts } = splitImageParts(parts);
-  const validImages = imageParts.filter(isUsableImagePart);
-  if (validImages.length === 0) return parts;
-  const coverUrls = await uploadCoverCandidates(validImages).catch(() => []);
-  if (coverUrls.length === 0) return parts;
-  const coverNote = buildCoverCandidateNote(coverUrls);
-  return [...parts, { text: coverNote }];
-}
-
 /**
  * Run the vision bridge: convert inline image parts into a text description via
  * an auto-selected vision model, and return image-free parts for the primary
@@ -667,10 +579,6 @@ export async function runVisionBridge(params: {
     );
   }
   turnImageCounts.set(signal, usedImages + toConvert.length);
-  // Kicked off in parallel with the bridge calls below (not awaited until the
-  // very end) so it never adds latency in the common case where the upload
-  // finishes before the bridge call does anyway.
-  const coverUploadPromise = uploadCoverCandidates(toConvert);
 
   const timeoutMs =
     config.getVisionBridgeTimeoutMs?.() ?? VISION_BRIDGE_TIMEOUT_MS;
@@ -814,9 +722,6 @@ export async function runVisionBridge(params: {
     }
   }
 
-  const coverUrls = await coverUploadPromise.catch(() => []);
-  const coverNote = coverUrls.length > 0 ? `${buildCoverCandidateNote(coverUrls)}\n\n` : '';
-
   return {
     applied: true,
     status: 'ok',
@@ -827,7 +732,7 @@ export async function runVisionBridge(params: {
       parts,
       buildInterpretationBlock(
         modelId,
-        coverNote + descriptions.join('\n\n'),
+        descriptions.join('\n\n'),
         toConvert.length,
         omittedCount,
         resolvedSourceContext,

@@ -9375,55 +9375,6 @@ describe('Session', () => {
       expect(mockGeminiClient.tryCompressChat).toHaveBeenCalledOnce();
     });
 
-    // Meeting-agent extension: a primary model that is ALREADY natively
-    // vision-capable (no bridge, no full-turn model switch — just
-    // getEffectiveInputModalities().image === true) never calls
-    // runVisionBridge, so the cover-upload side effect normally performed
-    // inside it has to be reproduced via maybeAnnotateCoverCandidates
-    // instead. This exercises the real (unmocked) function end to end.
-    it('uploads a meeting-cover candidate for an already image-capable model without touching the image', async () => {
-      const originalUploadUrl = process.env['AGENT_COVER_UPLOAD_URL'];
-      process.env['AGENT_COVER_UPLOAD_URL'] =
-        'http://127.0.0.1:9/internal/cover-upload';
-      const fetchSpy = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          url: 'https://cdn.example/meeting-for-you/cover.jpg',
-        }),
-      });
-      const originalFetch = global.fetch;
-      global.fetch = fetchSpy as unknown as typeof fetch;
-      try {
-        mockConfig.getEffectiveInputModalities = vi
-          .fn()
-          .mockReturnValue({ image: true });
-
-        await session.prompt({
-          sessionId: 'test-session-id',
-          prompt: [
-            { type: 'text', text: '这张能做会议封面吗' },
-            { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgo=' },
-          ],
-        });
-
-        expect(runVisionBridgeSpy).not.toHaveBeenCalled();
-        const sent = firstSentMessage();
-        // The primary model natively accepts images — this path must never
-        // strip or replace them, unlike the bridge path.
-        expect(sent.some((part) => 'inlineData' in part)).toBe(true);
-        expect(textParts(sent).join('\n')).toContain(
-          'https://cdn.example/meeting-for-you/cover.jpg',
-        );
-      } finally {
-        global.fetch = originalFetch;
-        if (originalUploadUrl === undefined) {
-          delete process.env['AGENT_COVER_UPLOAD_URL'];
-        } else {
-          process.env['AGENT_COVER_UPLOAD_URL'] = originalUploadUrl;
-        }
-      }
-    });
-
     it('clamps full-turn images before selecting the ACP route', async () => {
       const ENV_KEY = 'QWEN_CODE_MAX_INLINE_MEDIA_BYTES';
       const original = process.env[ENV_KEY];
