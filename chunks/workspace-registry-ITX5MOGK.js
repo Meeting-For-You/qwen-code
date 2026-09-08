@@ -1,16 +1,20 @@
 // Force strict mode and setup for ESM
 "use strict";
 import {
-  createDaemonStatusProvider
-} from "./chunk-DLEBZV26.js";
-import "./chunk-VECAGDHA.js";
-import "./chunk-SCW5FWGR.js";
-import "./chunk-4BNKY7SO.js";
+  WorkspaceGenerationClosedError,
+  createSingleWorkspaceRegistry,
+  createWorkspaceGenerationGuard,
+  createWorkspaceRegistry,
+  createWorkspaceSessionOwnerIndex
+} from "./chunk-MQM5PJML.js";
+import "./chunk-NYWWQ437.js";
+import "./chunk-OIBUG24X.js";
+import "./chunk-4JRM2BSM.js";
+import "./chunk-6WBRKHQO.js";
 import "./chunk-ZGXYO7DY.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";
 import "./chunk-OCPBI7J5.js";
-import "./chunk-III3QVBY.js";
 import "./chunk-RUGNCYNO.js";
 import "./chunk-H72BQNM3.js";
 import "./chunk-JHS74YAB.js";
@@ -21,8 +25,6 @@ import "./chunk-UDG5EZJI.js";
 import "./chunk-3VUENPWF.js";
 import "./chunk-M5GB774H.js";
 import "./chunk-IW6RQPQB.js";
-import "./chunk-7UYV53BC.js";
-import "./chunk-W3N5XAZ6.js";
 import "./chunk-6ZWR4VPS.js";
 import "./chunk-4RKOX6KV.js";
 import "./chunk-CQH5KTKC.js";
@@ -115,5 +117,9 @@ import "./chunk-TBWQLLFO.js";
 import "./chunk-5O2XNYP6.js";
 import "./chunk-J2S4EL5Y.js";
 export {
-  createDaemonStatusProvider
+  WorkspaceGenerationClosedError,
+  createSingleWorkspaceRegistry,
+  createWorkspaceGenerationGuard,
+  createWorkspaceRegistry,
+  createWorkspaceSessionOwnerIndex
 };

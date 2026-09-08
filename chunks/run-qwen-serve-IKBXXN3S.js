@@ -3756,17 +3756,17 @@ async function loadServeRuntimeModules() {
     workspaceRegistryModule,
     promptLedgerModule
   ] = await Promise.all([
-    import("./server-W2DPLUBV.js"),
-    import("./bridge-U5UMHA3U.js"),
+    import("./server-TCHZEMSW.js"),
+    import("./bridge-XAOWZ6WG.js"),
     import("./spawnChannel-63WFD5DT.js"),
     import("./process-registry-PMJOA5CO.js"),
     import("./workspace-service-CVLTKK22.js"),
     import("./types-WYCFCEHR.js"),
-    import("./daemon-status-provider-MV2DWOH4.js"),
+    import("./daemon-status-provider-CQBTW5YU.js"),
     import("./workspace-providers-status-26GFDVME.js"),
     import("./workspace-skills-status-ZAFSS6MB.js"),
-    import("./total-session-admission-4YY4DKL7.js"),
-    import("./workspace-registry-HMIFKWXI.js"),
+    import("./total-session-admission-UL74CGTE.js"),
+    import("./workspace-registry-ITX5MOGK.js"),
     import("./prompt-terminal-ledger-RXZ4GRZK.js")
   ]);
   return {
@@ -5984,7 +5984,7 @@ async function runQwenServeImpl(optsIn, deps, loggerLifecycle) {
     }), "persistSettingsFn");
     const [{ createSubSessionLauncher }, scheduledTaskRoutes] = await Promise.all([
       import("./create-sub-session-MC2CSW2R.js"),
-      import("./scheduled-tasks-Z65G5BR5.js")
+      import("./scheduled-tasks-N5ILIUCK.js")
     ]);
     const createCurrentSessionScheduledTaskHandler = /* @__PURE__ */ __name((workspaceCwd, runtimeBaseDir, getBridge, assertGenerationOpen) => async ({
       callerSessionId,
@@ -7472,7 +7472,7 @@ async function runQwenServeImpl(optsIn, deps, loggerLifecycle) {
         { createWorkspaceTrustReconciler },
         { createDaemonTrustPolicyMonitor }
       ] = await Promise.all([
-        import("./workspace-trust-reconciler-M5CQHEHS.js"),
+        import("./workspace-trust-reconciler-EAOE72IB.js"),
         import("./daemon-trust-policy-monitor-X74X46TC.js")
       ]);
       const materializationFor = /* @__PURE__ */ __name((entry, snapshot, decision) => {

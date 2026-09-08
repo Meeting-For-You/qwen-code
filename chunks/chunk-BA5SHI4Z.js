@@ -2,7 +2,7 @@
 "use strict";
 import {
   GIT_COMMIT_INFO
-} from "./chunk-SCW5FWGR.js";
+} from "./chunk-ZGEVNSXD.js";
 import {
   getCliVersion
 } from "./chunk-7UYV53BC.js";

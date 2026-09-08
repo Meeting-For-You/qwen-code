@@ -2,7 +2,7 @@
 "use strict";
 import {
   functionResponsePartsToString
-} from "./chunk-C6E3OYIL.js";
+} from "./chunk-UYI5ENJ2.js";
 import {
   observeHeadlessToolResultProjection,
   observeHeadlessToolResultWire,

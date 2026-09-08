@@ -2,7 +2,7 @@
 "use strict";
 import {
   appEvents
-} from "./chunk-6VAFEQPJ.js";
+} from "./chunk-E74DB2GX.js";
 import {
   CUSTOM_SANDBOX_IMAGE_ENV_VAR,
   HOST_UPDATE_RELAUNCH_ENV_VAR,

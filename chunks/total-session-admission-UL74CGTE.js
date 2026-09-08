@@ -1,16 +1,11 @@
 // Force strict mode and setup for ESM
 "use strict";
 import {
-  WorkspaceGenerationClosedError,
-  createSingleWorkspaceRegistry,
-  createWorkspaceGenerationGuard,
-  createWorkspaceRegistry,
-  createWorkspaceSessionOwnerIndex
-} from "./chunk-MQM5PJML.js";
-import "./chunk-NYWWQ437.js";
+  createTotalSessionAdmissionController
+} from "./chunk-VQUGEVGR.js";
 import "./chunk-OIBUG24X.js";
 import "./chunk-4JRM2BSM.js";
-import "./chunk-4BNKY7SO.js";
+import "./chunk-6WBRKHQO.js";
 import "./chunk-ZGXYO7DY.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";
@@ -117,9 +112,5 @@ import "./chunk-TBWQLLFO.js";
 import "./chunk-5O2XNYP6.js";
 import "./chunk-J2S4EL5Y.js";
 export {
-  WorkspaceGenerationClosedError,
-  createSingleWorkspaceRegistry,
-  createWorkspaceGenerationGuard,
-  createWorkspaceRegistry,
-  createWorkspaceSessionOwnerIndex
+  createTotalSessionAdmissionController
 };

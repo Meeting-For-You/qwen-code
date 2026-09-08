@@ -3,7 +3,7 @@
 import {
   maybeOpenWebShellBrowser,
   serveCommand
-} from "./chunk-2UAULG5W.js";
+} from "./chunk-67BEDVQB.js";
 import "./chunk-6H67XLET.js";
 import "./chunk-UXEO7E3V.js";
 import "./chunk-7U5G6JXI.js";

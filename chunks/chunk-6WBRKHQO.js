@@ -3970,7 +3970,7 @@ function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 __name(isRecord2, "isRecord");
-function annotateAttachmentReferences(dispatchBlocks, resolvedBlocks) {
+function annotateAttachmentReferences(sessionId, dispatchBlocks, resolvedBlocks) {
   if (!process.env["AGENT_ATTACHMENT_LABELING"]) return [...resolvedBlocks];
   const out = [];
   for (let i = 0; i < resolvedBlocks.length; i++) {
@@ -3980,7 +3980,7 @@ function annotateAttachmentReferences(dispatchBlocks, resolvedBlocks) {
     if (resolved?.type === "image" && original && isSessionAttachmentReference(original) && original.type === "image") {
       out.push({
         type: "text",
-        text: `[attachment_id: ${original.attachmentId}]`
+        text: `[attachment_id: ${original.attachmentId}, session_id: ${sessionId}]`
       });
     }
   }
@@ -9207,6 +9207,7 @@ function createAcpSessionBridge(opts) {
                 let resolvedPrompt;
                 try {
                   resolvedPrompt = annotateAttachmentReferences(
+                    sessionId,
                     dispatchBlocks,
                     await entry.attachments.resolveContent(dispatchBlocks)
                   );
@@ -9220,6 +9221,7 @@ function createAcpSessionBridge(opts) {
                   dispatchBlocks = perBlock.retainedBlocks;
                   resolvedPrompt = withAttachmentDegradationMarker(
                     annotateAttachmentReferences(
+                      sessionId,
                       perBlock.retainedBlocks,
                       perBlock.resolvedBlocks
                     )

@@ -2,7 +2,7 @@
 "use strict";
 import {
   recomputeMcpGating
-} from "./chunk-JNSEBNCA.js";
+} from "./chunk-SWAVMXHI.js";
 import {
   classifyApiError,
   fireSessionDeleteHook
@@ -26,7 +26,7 @@ import {
   isSlashCommand,
   recordDaemonSessionModel,
   restoreSessionModelThenAuthenticate
-} from "./chunk-C6E3OYIL.js";
+} from "./chunk-UYI5ENJ2.js";
 import {
   SessionIdConflictError,
   appEvents,
@@ -34,7 +34,7 @@ import {
   cleanupReviewWorktreeLeases,
   loadCliConfig,
   normalizeDisabledToolList
-} from "./chunk-6VAFEQPJ.js";
+} from "./chunk-E74DB2GX.js";
 import "./chunk-NYX53SV4.js";
 import {
   collectContextData,
@@ -59,7 +59,7 @@ import {
   startNonInteractiveOpenAILogHousekeeping
 } from "./chunk-5X4GWKXI.js";
 import "./chunk-KW7NOTN6.js";
-import "./chunk-2UAULG5W.js";
+import "./chunk-67BEDVQB.js";
 import "./chunk-6H67XLET.js";
 import {
   beginAcpBootstrapConfigProfiling,
@@ -148,8 +148,8 @@ import {
   readVoiceModel
 } from "./chunk-XRSOI3DL.js";
 import "./chunk-YTDVNSUQ.js";
-import "./chunk-VECAGDHA.js";
-import "./chunk-SCW5FWGR.js";
+import "./chunk-BA5SHI4Z.js";
+import "./chunk-ZGEVNSXD.js";
 import "./chunk-ZGXYO7DY.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";

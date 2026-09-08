@@ -2,7 +2,7 @@
 "use strict";
 import {
   startPostRenderPrefetches
-} from "./chunk-OLCXTUNI.js";
+} from "./chunk-RRQB4DFU.js";
 import {
   useAutoAcceptIndicator
 } from "./chunk-FKCXI3MW.js";
@@ -32,7 +32,7 @@ import {
 } from "./chunk-ZGLKJX24.js";
 import {
   StreamJsonOutputAdapter
-} from "./chunk-47C3B6EE.js";
+} from "./chunk-NRJDLERG.js";
 import {
   BuiltinCommandLoader,
   BundledSkillLoader,
@@ -79,14 +79,14 @@ import {
   resetBackgroundStateForSessionSwitch,
   serializeUserPromptExpansionPrompt,
   supportsMatchers
-} from "./chunk-C6E3OYIL.js";
+} from "./chunk-UYI5ENJ2.js";
 import {
   EXTENSION_RELOAD_FAILED_REASON,
   ExtensionRefreshState,
   appEvents,
   cleanupReviewWorktreeLeases,
   loadHierarchicalGeminiMemory
-} from "./chunk-6VAFEQPJ.js";
+} from "./chunk-E74DB2GX.js";
 import {
   disableKittyProtocol,
   isKittyProtocolEnabled,
@@ -275,7 +275,7 @@ import {
   themeManager
 } from "./chunk-QFCDF5PL.js";
 import "./chunk-KW7NOTN6.js";
-import "./chunk-2UAULG5W.js";
+import "./chunk-67BEDVQB.js";
 import "./chunk-6H67XLET.js";
 import "./chunk-HQSUZK5O.js";
 import {
@@ -330,8 +330,8 @@ import {
 import "./chunk-YTDVNSUQ.js";
 import {
   getExtendedSystemInfo
-} from "./chunk-VECAGDHA.js";
-import "./chunk-SCW5FWGR.js";
+} from "./chunk-BA5SHI4Z.js";
+import "./chunk-ZGEVNSXD.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";
 import {

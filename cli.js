@@ -325,7 +325,7 @@ async function runCliEntry(rawArgv = process.argv.slice(2)) {
     return;
   }
   if (route === "serve") {
-    const { tryRunServeFastPath } = await import("./chunks/fast-path-GLJRVKAB.js");
+    const { tryRunServeFastPath } = await import("./chunks/fast-path-L6H752MM.js");
     if (await tryRunServeFastPath(argv)) {
       return;
     }
@@ -341,7 +341,7 @@ async function runCliEntry(rawArgv = process.argv.slice(2)) {
   ) ? await import("./chunks/acp-startup-profiler-GNYAL6LI.js") : void 0;
   acpStartupProfiler?.initializeAcpStartupProfiler();
   acpStartupProfiler?.markAcpStartup("geminiImportStart");
-  const { main } = await import("./chunks/gemini-NIK5SSEI.js");
+  const { main } = await import("./chunks/gemini-ZTD7A4BD.js");
   acpStartupProfiler?.markAcpStartup("geminiImportEnd");
   await main();
 }

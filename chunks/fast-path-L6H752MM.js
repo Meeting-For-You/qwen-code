@@ -373,7 +373,7 @@ async function maybeOpenWebShellBrowser(handle, open, openWithAuth) {
   } catch {
     return;
   }
-  const { maybeOpenWebShellBrowser: openBrowser } = await import("./serve-QFQNTKUQ.js");
+  const { maybeOpenWebShellBrowser: openBrowser } = await import("./serve-4E35VCUC.js");
   await openBrowser(handle, true, openWithAuth);
 }
 __name(maybeOpenWebShellBrowser, "maybeOpenWebShellBrowser");
@@ -446,7 +446,7 @@ async function tryRunServeFastPath(rawArgv = process.argv.slice(2)) {
       process.exit(1);
     }
   }
-  const { runQwenServe } = await import("./run-qwen-serve-THD7J2RA.js");
+  const { runQwenServe } = await import("./run-qwen-serve-IKBXXN3S.js");
   let handle;
   try {
     handle = await runQwenServe(parsed.options, {

@@ -2,10 +2,10 @@
 "use strict";
 import {
   registerMcpHotReload
-} from "./chunk-JNSEBNCA.js";
+} from "./chunk-SWAVMXHI.js";
 import {
   startEarlyStartupPrefetches
-} from "./chunk-OLCXTUNI.js";
+} from "./chunk-RRQB4DFU.js";
 import {
   ExtensionRefreshState,
   appEvents,
@@ -15,8 +15,8 @@ import {
   loadSandboxConfig,
   parseArguments,
   validateAuthMethod
-} from "./chunk-6VAFEQPJ.js";
-import "./chunk-2UAULG5W.js";
+} from "./chunk-E74DB2GX.js";
+import "./chunk-67BEDVQB.js";
 import {
   getHeadlessYoloSafetyWarning
 } from "./chunk-6H67XLET.js";
@@ -49,7 +49,7 @@ import {
   isValidSessionId
 } from "./chunk-ZEZKIS2K.js";
 import "./chunk-YTDVNSUQ.js";
-import "./chunk-SCW5FWGR.js";
+import "./chunk-ZGEVNSXD.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";
 import "./chunk-24S4HGLG.js";
@@ -3058,7 +3058,7 @@ ${finalArgs[promptIndex + 1]}`;
     profileCheckpoint("after_initialize_app");
     if (config.getExperimentalZedIntegration()) {
       markAcpStartup("acpImportStart");
-      const { runAcpAgent } = await import("./acpAgent-XL2XH7U3.js");
+      const { runAcpAgent } = await import("./acpAgent-ODBE5J2Y.js");
       markAcpStartup("acpImportEnd");
       try {
         await runAcpAgent(config, settings, argv, {
@@ -3105,7 +3105,7 @@ ${finalArgs[promptIndex + 1]}`;
       setInteractiveMode(true);
       await kittyProtocolDetectionComplete;
       await themeAutoDetectionComplete;
-      const { startInteractiveUI } = await import("./startInteractiveUI-MK7IATIN.js");
+      const { startInteractiveUI } = await import("./startInteractiveUI-5SEUWRG3.js");
       await startInteractiveUI(
         config,
         settings,
@@ -3166,7 +3166,7 @@ ${finalArgs[promptIndex + 1]}`;
 ${input}`;
       }
     }
-    const { validateNonInteractiveAuth } = await import("./validateNonInterActiveAuth-ECHOMCJB.js");
+    const { validateNonInteractiveAuth } = await import("./validateNonInterActiveAuth-Y35PSAXI.js");
     const nonInteractiveConfig = await validateNonInteractiveAuth(
       settings.merged.security?.auth?.useExternal,
       config,
@@ -3175,7 +3175,7 @@ ${input}`;
     const prompt_id = createNonInteractivePromptId(config.getSessionId());
     if (inputFormat === "stream-json" /* STREAM_JSON */) {
       const trimmedInput = (input ?? "").trim();
-      const { runNonInteractiveStreamJson } = await import("./session-7JFMN4FO.js");
+      const { runNonInteractiveStreamJson } = await import("./session-6QKUYOBS.js");
       nonInteractiveHousekeeping?.startNonInteractiveOpenAILogHousekeeping(
         nonInteractiveConfig,
         settings
@@ -3206,7 +3206,7 @@ ${input}`;
       prompt_length: input.length
     });
     debugLogger5.debug(`Session ID: ${config.getSessionId()}`);
-    const { runNonInteractive } = await import("./nonInteractiveCli-WPN75MLS.js");
+    const { runNonInteractive } = await import("./nonInteractiveCli-J3CXTLUT.js");
     nonInteractiveHousekeeping?.startNonInteractiveOpenAILogHousekeeping(
       nonInteractiveConfig,
       settings
