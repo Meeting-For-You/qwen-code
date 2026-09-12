@@ -1297,13 +1297,15 @@ async function createTransportWithOAuth(
         },
       };
 
-      return new StreamableHTTPClientTransport(
+      const transport = new StreamableHTTPClientTransport(
         new URL(mcpServerConfig.httpUrl),
         oauthTransportOptions,
       );
+      invocationContextTransports.add(transport);
+      return transport;
     } else if (mcpServerConfig.url) {
       // Create SSE transport with OAuth token in Authorization header
-      return new SSEClientTransport(new URL(mcpServerConfig.url), {
+      const transport = new SSEClientTransport(new URL(mcpServerConfig.url), {
         requestInit: {
           headers: {
             ...mcpServerConfig.headers,
@@ -1311,6 +1313,8 @@ async function createTransportWithOAuth(
           },
         },
       });
+      invocationContextTransports.add(transport);
+      return transport;
     }
 
     return null;
@@ -2383,16 +2387,23 @@ export async function createTransport(
     if (mcpServerConfig.httpUrl) {
       (transportOptions as StreamableHTTPClientTransportOptions).fetch =
         createMcpStreamableHttpFetch(mcpServerName, mcpServerConfig);
-      return new StreamableHTTPClientTransport(
+      const transport = new StreamableHTTPClientTransport(
         new URL(mcpServerConfig.httpUrl),
         transportOptions,
       );
+      // See the invocationContextTransports comment below (default httpUrl
+      // branch) for why this is registered on every HTTP/SSE branch, not
+      // just the stdio one it originally shipped for.
+      invocationContextTransports.add(transport);
+      return transport;
     } else if (mcpServerConfig.url) {
       // Default to SSE if only url is provided
-      return new SSEClientTransport(
+      const transport = new SSEClientTransport(
         new URL(mcpServerConfig.url),
         transportOptions,
       );
+      invocationContextTransports.add(transport);
+      return transport;
     }
     throw new Error(
       'No URL configured for ServiceAccountImpersonation MCP Server',
@@ -2411,15 +2422,19 @@ export async function createTransport(
     if (mcpServerConfig.httpUrl) {
       (transportOptions as StreamableHTTPClientTransportOptions).fetch =
         createMcpStreamableHttpFetch(mcpServerName, mcpServerConfig);
-      return new StreamableHTTPClientTransport(
+      const transport = new StreamableHTTPClientTransport(
         new URL(mcpServerConfig.httpUrl),
         transportOptions,
       );
+      invocationContextTransports.add(transport);
+      return transport;
     } else if (mcpServerConfig.url) {
-      return new SSEClientTransport(
+      const transport = new SSEClientTransport(
         new URL(mcpServerConfig.url),
         transportOptions,
       );
+      invocationContextTransports.add(transport);
+      return transport;
     }
     throw new Error('No URL configured for Google Credentials MCP server');
   }
@@ -2490,10 +2505,26 @@ export async function createTransport(
       };
     }
 
-    return new StreamableHTTPClientTransport(
+    const transport = new StreamableHTTPClientTransport(
       new URL(mcpServerConfig.httpUrl),
       transportOptions,
     );
+    // Invocation-context propagation (`_meta["qwen-code/invocation"]`,
+    // AsyncLocalStorage-scoped sessionId/promptId set by the ACP session
+    // around each tool call — see utils/invocation-context.ts) originally
+    // only registered stdio transports here, because stdio servers are
+    // spawned per-daemon and HTTP/SSE servers were assumed to be
+    // long-lived/shared and thus not session-scoped. That assumption
+    // doesn't hold for a Streamable HTTP server that IS meant to
+    // disambiguate concurrent daemon sessions on the same connection
+    // (medical-agent's own MCP server does exactly this: one workspace
+    // per session, looked up by sessionId on every call). Registering the
+    // transport here is safe for pooled/shared HTTP clients too, because
+    // `getInvocationContext()` resolves from the *calling* async context
+    // (AsyncLocalStorage), not from anything tied to the transport/client
+    // instance itself.
+    invocationContextTransports.add(transport);
+    return transport;
   }
 
   if (mcpServerConfig.url) {
@@ -2513,10 +2544,12 @@ export async function createTransport(
       };
     }
 
-    return new SSEClientTransport(
+    const transport = new SSEClientTransport(
       new URL(mcpServerConfig.url),
       transportOptions,
     );
+    invocationContextTransports.add(transport);
+    return transport;
   }
 
   if (mcpServerConfig.command) {

@@ -1892,7 +1892,7 @@ lOTTGqPpwFUbw2EMOOpFYuIyzGMIpUNMBjE2gvJiqFQ=
       ['Streamable HTTP', { httpUrl: 'http://example.test/mcp' }],
       ['SSE', { url: 'http://example.test/sse' }],
     ])(
-      'denies invocation context for %s transport clients',
+      'grants invocation context for %s transport clients',
       async (_transportName, serverConfig) => {
         const callTool = vi.fn().mockResolvedValue({
           content: [{ type: 'text', text: 'ok' }],
@@ -1943,7 +1943,9 @@ lOTTGqPpwFUbw2EMOOpFYuIyzGMIpUNMBjE2gvJiqFQ=
             .execute(new AbortController().signal),
         );
 
-        expect(Object.hasOwn(callTool.mock.calls[0][0], '_meta')).toBe(false);
+        expect(callTool.mock.calls[0][0]._meta).toEqual({
+          [INVOCATION_CONTEXT_META_KEY]: context,
+        });
       },
     );
 
