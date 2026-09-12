@@ -1,0 +1,39 @@
+{
+  "name": "@qwen-code/webui",
+  "version": "0.22.2",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./daemon-react-sdk": {
+      "types": "./dist/daemon-react-sdk.d.ts",
+      "import": "./dist/daemon-react-sdk.js",
+      "require": "./dist/daemon-react-sdk.cjs"
+    },
+    "./icons": {
+      "types": "./dist/components/icons/index.d.ts",
+      "import": "./dist/components/icons/index.js",
+      "require": "./dist/components/icons/index.cjs"
+    },
+    "./tailwind.preset": "./tailwind.preset.cjs",
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "tailwind.preset.cjs"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@qwen-code/sdk": "https://github.com/Meeting-For-You/qwen-code/archive/c4b7e93f5dd265d5ec82382f0621a9ada9e9489c.tar.gz",
+    "markdown-it": "^14.1.0"
+  }
+}
