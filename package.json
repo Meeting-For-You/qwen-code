@@ -1,0 +1,42 @@
+{
+  "name": "@qwen-code/sdk",
+  "version": "0.1.8",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./daemon": {
+      "types": "./dist/daemon/index.d.ts",
+      "import": "./dist/daemon/index.js",
+      "require": "./dist/daemon/index.cjs"
+    },
+    "./daemon/transports": {
+      "types": "./dist/daemon/transports.d.ts",
+      "import": "./dist/daemon/transports.js",
+      "require": "./dist/daemon/transports.cjs"
+    },
+    "./daemon/transcript": {
+      "types": "./dist/daemon/transcript.d.ts",
+      "import": "./dist/daemon/transcript.js",
+      "require": "./dist/daemon/transcript.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.0"
+  }
+}
