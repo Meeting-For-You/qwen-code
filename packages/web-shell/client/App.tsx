@@ -1048,6 +1048,18 @@ export interface WebShellProps {
    * built-in or daemon behavior after handling the command in the host.
    */
   onSlashCommand?: WebShellSlashCommandHandler;
+  /**
+   * Controls whether Web Shell's input-based "start a new session?" suggestion
+   * banner can appear. Accepting it calls the same session-creation path as
+   * the sidebar's New Chat button and `/new`/`/clear`/`/reset` — hosts that
+   * already intercept those via `onSlashCommand` still see this banner unless
+   * they also set this to `false`, since it bypasses `onSlashCommand` entirely.
+   * Works alongside the daemon's `session_generation` capability, not instead
+   * of it: `false` force-disables the suggestion even when the daemon
+   * advertises the capability, while `true`/omitted still requires the
+   * capability to be satisfied.
+   */
+  newSessionSuggestionEnabled?: boolean;
   /** Built-in @ mention providers to enable. Defaults to all built-ins. */
   builtinAtProviders?: WebShellBuiltinAtProvidersConfig;
   /**
@@ -1948,6 +1960,7 @@ export function App({
   hiddenSlashCommands,
   slashCommandCategoryOrder,
   onSlashCommand,
+  newSessionSuggestionEnabled,
   builtinAtProviders,
   atProviders,
   composerTagIcons,
@@ -8704,6 +8717,7 @@ export function App({
     suppress: suppressNewSessionSuggestion,
   } = useNewSessionSuggestion({
     enabled:
+      newSessionSuggestionEnabled !== false &&
       connection.capabilities?.features.includes('session_generation') === true,
     messages,
     sessionId: connection.sessionId,

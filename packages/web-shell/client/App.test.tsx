@@ -13368,6 +13368,76 @@ describe('App session callbacks', () => {
     expect(editorInsertText).not.toHaveBeenCalled();
   });
 
+  it('never shows the new-session suggestion when newSessionSuggestionEnabled is false, even when the daemon advertises session_generation and the prompt would otherwise trigger it', async () => {
+    // Hosts that pin one runtime to one long-lived task (no independent "new
+    // session" that's allowed to share the same runtime/workspace) need a way
+    // to force this off regardless of the daemon capability — this banner's
+    // accept action calls the same session-creation path as the sidebar's New
+    // Chat button, bypassing onSlashCommand entirely.
+    vi.useFakeTimers();
+    mockConnection.capabilities.features = ['session_generation'];
+    (
+      mockConnection as typeof mockConnection & {
+        tokenCount?: number;
+        contextWindow?: number;
+      }
+    ).tokenCount = 600;
+    (
+      mockConnection as typeof mockConnection & {
+        tokenCount?: number;
+        contextWindow?: number;
+      }
+    ).contextWindow = 1000;
+    testState.messages = Array.from({ length: 8 }, (_, index) => ({
+      id: `m-disabled-${index}`,
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `existing session topic ${index} about daemon generation review work`,
+      timestamp: index,
+    }));
+    testState.prompt =
+      'Help me brainstorm Web Shell interaction ideas on top of this interface for a design doc';
+    mockSessionActions.generateSessionContent.mockImplementation(
+      async function* () {
+        yield {
+          type: 'delta',
+          requestId: 'req-1',
+          seq: 0,
+          text: JSON.stringify({
+            suggestion: 'new_session',
+            confidence: 0.91,
+          }),
+        };
+        yield {
+          type: 'done',
+          requestId: 'req-1',
+          model: 'fast-model',
+          modelSource: 'fast',
+        };
+      },
+    );
+
+    const { container } = renderApp({ newSessionSuggestionEnabled: false });
+    await flush();
+
+    act(() => {
+      testState.latestChatEditorProps?.onInputTextChange?.(testState.prompt);
+    });
+    await flush();
+    act(() => {
+      vi.advanceTimersByTime(121);
+    });
+    await flush();
+    act(() => {
+      vi.advanceTimersByTime(701);
+    });
+    await flush();
+
+    expect(
+      container.querySelector('[data-testid="new-session-suggestion"]'),
+    ).toBeNull();
+    expect(mockSessionActions.generateSessionContent).not.toHaveBeenCalled();
+  });
+
   it('suggests sending a side question with BTW and clears the accepted draft', async () => {
     vi.useFakeTimers();
     mockConnection.capabilities.features = ['session_generation'];
