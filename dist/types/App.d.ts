@@ -159,6 +159,18 @@ export interface WebShellProps {
      * built-in or daemon behavior after handling the command in the host.
      */
     onSlashCommand?: WebShellSlashCommandHandler;
+    /**
+     * Controls whether Web Shell's input-based "start a new session?" suggestion
+     * banner can appear. Accepting it calls the same session-creation path as
+     * the sidebar's New Chat button and `/new`/`/clear`/`/reset` — hosts that
+     * already intercept those via `onSlashCommand` still see this banner unless
+     * they also set this to `false`, since it bypasses `onSlashCommand` entirely.
+     * Works alongside the daemon's `session_generation` capability, not instead
+     * of it: `false` force-disables the suggestion even when the daemon
+     * advertises the capability, while `true`/omitted still requires the
+     * capability to be satisfied.
+     */
+    newSessionSuggestionEnabled?: boolean;
     /** Built-in @ mention providers to enable. Defaults to all built-ins. */
     builtinAtProviders?: WebShellBuiltinAtProvidersConfig;
     /**
@@ -288,5 +300,5 @@ interface SideTaskCatalogState {
 }
 export declare function mergeSideTaskCatalog(catalog: SideTaskCatalogState, parentSessionId: string, listedItems: SideTaskListItem[], optimisticIds: ReadonlySet<string>): SideTaskCatalogState;
 export declare function getEnvironmentAgentTasks(messages: readonly Message[], sessionTasks: readonly DaemonSessionTaskStatus[]): EnvironmentAgentTask[];
-export declare function App({ onSessionIdChange, onSessionCreated, theme: providedTheme, onThemeChange, language: providedLanguage, onLanguageChange, className: externalClassName, style: externalStyle, shadowDom, onConnectionChange, onStreamingStateChange, onError, onBugReport, hiddenSlashCommands, slashCommandCategoryOrder, onSlashCommand, builtinAtProviders, atProviders, composerTagIcons, fileUploadEnabled, fileUploadDirectory, renderToolHeaderExtra, renderWelcomeHeader, renderWelcomeFooter, mobileWelcomeFooterMiddle, parseUserMessageContent, renderUserMessageContent, renderComposerTag, renderComposerTagTooltip, onComposerTagClick, renderAssistantTurnFooter, renderComposerToolbarStart, renderComposerToolbarEnd, renderComposerToolbarRight, renderComposerHeader, renderComposerFooter, renderChatHeader, renderFooter, bottomStatusItems, chatMaxWidth, sidebar, header, rightPanel, environmentPanel, splitSessionIds: externalSplitSessionIds, onSplitSessionIdsChange, renderPaneHeaderActions, onRightPanelOpen, messageTurnOutputs, shellRef, composerToolbarActions, composerPlaceholders, compactThinking, collapseCompletedTurns, markdownTableMode, virtualScrollThreshold, markdown, loadingPhrases, onAgentTasksChange, onTranscriptChange, onToast, composerRef, onComposerReady, composerInput, composerInputVersion, onSessionChange, prepareSubmit, onSubmitBefore, restartSseOnPrompt, historyPageSize, initialSelectedWorkspaceCwd, lockedWorkspaceCwd, lockedWorkspaceCapability, }?: AppProps): import("react/jsx-runtime").JSX.Element;
+export declare function App({ onSessionIdChange, onSessionCreated, theme: providedTheme, onThemeChange, language: providedLanguage, onLanguageChange, className: externalClassName, style: externalStyle, shadowDom, onConnectionChange, onStreamingStateChange, onError, onBugReport, hiddenSlashCommands, slashCommandCategoryOrder, onSlashCommand, newSessionSuggestionEnabled, builtinAtProviders, atProviders, composerTagIcons, fileUploadEnabled, fileUploadDirectory, renderToolHeaderExtra, renderWelcomeHeader, renderWelcomeFooter, mobileWelcomeFooterMiddle, parseUserMessageContent, renderUserMessageContent, renderComposerTag, renderComposerTagTooltip, onComposerTagClick, renderAssistantTurnFooter, renderComposerToolbarStart, renderComposerToolbarEnd, renderComposerToolbarRight, renderComposerHeader, renderComposerFooter, renderChatHeader, renderFooter, bottomStatusItems, chatMaxWidth, sidebar, header, rightPanel, environmentPanel, splitSessionIds: externalSplitSessionIds, onSplitSessionIdsChange, renderPaneHeaderActions, onRightPanelOpen, messageTurnOutputs, shellRef, composerToolbarActions, composerPlaceholders, compactThinking, collapseCompletedTurns, markdownTableMode, virtualScrollThreshold, markdown, loadingPhrases, onAgentTasksChange, onTranscriptChange, onToast, composerRef, onComposerReady, composerInput, composerInputVersion, onSessionChange, prepareSubmit, onSubmitBefore, restartSseOnPrompt, historyPageSize, initialSelectedWorkspaceCwd, lockedWorkspaceCwd, lockedWorkspaceCapability, }?: AppProps): import("react/jsx-runtime").JSX.Element;
 export {};
