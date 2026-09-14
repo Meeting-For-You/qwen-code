@@ -2104,7 +2104,7 @@ describe('ChatEditor file upload gating', () => {
     expect(workspace.client.uploadWorkspaceFile).not.toHaveBeenCalled();
   });
 
-  it('uploads picker selections into the captured directory and inserts a tag', async () => {
+  it('asks before uploading picker selections into the captured directory', async () => {
     const onAttachmentPreview = vi.fn();
     const workspace = makeWorkspace(['workspace_file_upload']);
     workspace.client.uploadWorkspaceFile.mockResolvedValue({
@@ -2146,6 +2146,15 @@ describe('ChatEditor file upload gating', () => {
     // Clearing the input lets re-selecting the same file fire a new change
     // event in real browsers.
     expect(input.value).toBe('');
+
+    // Selecting a file alone only opens the choice dialog; no workspace write
+    // happens until the user explicitly chooses the upload branch.
+    expect(workspace.client.uploadWorkspaceFile).not.toHaveBeenCalled();
+    expect(
+      document.querySelector('[data-web-shell-drop-choice-dialog]'),
+    ).not.toBeNull();
+    chooseDropAction('upload');
+    await act(async () => {});
 
     expect(workspace.client.uploadWorkspaceFile).toHaveBeenCalledTimes(1);
     expect(workspace.client.uploadWorkspaceFile.mock.calls[0][0].path).toBe(
@@ -2532,7 +2541,7 @@ describe('ChatEditor file upload gating', () => {
     expect(restore).toHaveBeenCalledOnce();
   });
 
-  it('restores the mention when every picker selection is locally rejected', async () => {
+  it('restores the mention when a picker choice is canceled', async () => {
     const workspace = makeWorkspace(['workspace_file_upload']);
     uploadWorkspaceState.current = workspace;
     const container = renderChatEditor({});
@@ -2544,22 +2553,17 @@ describe('ChatEditor file upload gating', () => {
     act(() => {
       composerCoreState.onFileUploadRequest?.('docs', restore);
     });
-    const oversized = new File(['x'], 'big.bin');
-    Object.defineProperty(oversized, 'size', {
-      value: 50 * 1024 * 1024 + 1,
-    });
     Object.defineProperty(input, 'files', {
-      value: [oversized],
+      value: [new File(['x'], 'big.bin')],
       configurable: true,
     });
     act(() => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await act(async () => {});
-
-    // Nothing was queued, so the picker closed without any upload and the
-    // consumed restore must give the typed query back.
+    // A selected file stays local while the user chooses its destination.
     expect(workspace.client.uploadWorkspaceFile).not.toHaveBeenCalled();
+    expect(restore).not.toHaveBeenCalled();
+    chooseDropAction('cancel');
     expect(restore).toHaveBeenCalledTimes(1);
   });
 

@@ -1604,8 +1604,16 @@ export const ChatEditor = memo(
     const [pendingDropFiles, setPendingDropFiles] = useState<File[] | null>(
       null,
     );
+    const [pendingUploadDirectory, setPendingUploadDirectory] = useState<
+      string | undefined
+    >();
+    const pendingPickerRestoreRef = useRef<(() => void) | undefined>(undefined);
     useLayoutEffect(() => {
       setPendingDropFiles(null);
+      setPendingUploadDirectory(undefined);
+      const restore = pendingPickerRestoreRef.current;
+      pendingPickerRestoreRef.current = undefined;
+      restore?.();
     }, [disabled, uploadTargetKey]);
 
     // -- File upload ----------------------------------------------------------
@@ -1830,6 +1838,7 @@ export const ChatEditor = memo(
         clearImageDragState();
         event.preventDefault();
         event.stopPropagation();
+        setPendingUploadDirectory(fileUploadDirectory ?? '.');
         setPendingDropFiles(files);
       },
       [
@@ -1844,20 +1853,25 @@ export const ChatEditor = memo(
     const referenceDroppedFiles = useCallback(() => {
       if (!pendingDropFiles) return;
       ingestFiles(pendingDropFiles);
+      pendingPickerRestoreRef.current = undefined;
+      setPendingUploadDirectory(undefined);
       setPendingDropFiles(null);
     }, [ingestFiles, pendingDropFiles]);
     const uploadDroppedFiles = useCallback(() => {
       if (!pendingDropFiles) return;
       uploadFiles(
         pendingDropFiles,
-        fileUploadDirectory ?? '.',
+        pendingUploadDirectory ?? fileUploadDirectory ?? '.',
         insertUploadReference,
       );
+      pendingPickerRestoreRef.current = undefined;
+      setPendingUploadDirectory(undefined);
       setPendingDropFiles(null);
     }, [
       fileUploadDirectory,
       insertUploadReference,
       pendingDropFiles,
+      pendingUploadDirectory,
       uploadFiles,
     ]);
     const handleUploadPickerChange = useCallback(
@@ -1868,21 +1882,18 @@ export const ChatEditor = memo(
         const restore = uploadPickerRestoreRef.current;
         uploadPickerRestoreRef.current = undefined;
         event.target.value = '';
-        // Only upload if the target workspace is unchanged since the picker
-        // opened; otherwise a stale directory path would land in the newly
-        // selected workspace (the hook's generation cancel only clears items
-        // already queued, not this fresh call).
+        // Keep picked files local until the user chooses whether they should
+        // be referenced by this message or uploaded to the workspace. This
+        // avoids spending upload resources for an abandoned draft and lets
+        // the composer render attachment/image previews before submission.
         if (
           files.length > 0 &&
           capturedKey !== '' &&
           capturedKey === uploadTargetKey
         ) {
-          const queued = uploadFiles(files, targetDir, insertUploadReference);
-          if (queued === 0) {
-            // Every chosen file was rejected locally (e.g. all oversized):
-            // the picker closed without any upload, so give the query back.
-            restore?.();
-          }
+          pendingPickerRestoreRef.current = restore;
+          setPendingUploadDirectory(targetDir);
+          setPendingDropFiles(files);
         } else {
           // The @ panel deleted the mention query before opening the picker.
           // A blocked or empty selection must give it back, like the native
@@ -1890,7 +1901,7 @@ export const ChatEditor = memo(
           restore?.();
         }
       },
-      [uploadFiles, insertUploadReference, uploadTargetKey],
+      [uploadTargetKey],
     );
     useEffect(() => {
       // React only wires `cancel` on <dialog>; the file input needs a native
@@ -3558,7 +3569,13 @@ export const ChatEditor = memo(
         <Dialog
           open={pendingDropFiles !== null}
           onOpenChange={(open) => {
-            if (!open) setPendingDropFiles(null);
+            if (!open) {
+              setPendingDropFiles(null);
+              setPendingUploadDirectory(undefined);
+              const restore = pendingPickerRestoreRef.current;
+              pendingPickerRestoreRef.current = undefined;
+              restore?.();
+            }
           }}
         >
           <DialogContent
