@@ -36314,6 +36314,7 @@ function Zme(e) {
 const Yme = [
   "approvalMode",
   "contextUsage",
+  "files",
   "gitBranch",
   "model",
   "widthMode",
@@ -38382,6 +38383,22 @@ ${me.id}`
                                         )
                                       }
                                     )
+                                  }
+                                ),
+                                Ds("files") && ot && /* @__PURE__ */ o(
+                                  "button",
+                                  {
+                                    type: "button",
+                                    className: Te.toolBtn,
+                                    "data-web-shell-upload-button": !0,
+                                    disabled: p,
+                                    onClick: (me) => {
+                                      me.stopPropagation(), ut.closeSlashMenu(), ut.closeAtMenu(), Io(!1), Hn(ie ?? ".");
+                                    },
+                                    "aria-label": lt("at.files.upload"),
+                                    title: lt("at.files.upload"),
+                                    "data-tooltip": lt("at.files.upload"),
+                                    children: /* @__PURE__ */ o("span", { className: Te.toolBtnIcon, children: /* @__PURE__ */ o(Vw, { "aria-hidden": !0 }) })
                                   }
                                 ),
                                 Tt && /* @__PURE__ */ o("div", { ref: Qo, className: Te.toolbarEnd, children: /* @__PURE__ */ o(
