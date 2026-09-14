@@ -1590,6 +1590,49 @@ describe('ChatEditor file upload gating', () => {
     ).not.toBeNull();
   });
 
+  it('renders the toolbar upload button only when the host enables it', () => {
+    uploadWorkspaceState.current = makeWorkspace(['workspace_file_upload']);
+    const shown = renderChatEditor({ visibleToolbarActions: ['files'] });
+    const input = shown.querySelector<HTMLInputElement>(
+      '[data-web-shell-upload-input]',
+    )!;
+    const openPicker = vi.spyOn(input, 'click');
+    const button = shown.querySelector<HTMLButtonElement>(
+      '[data-web-shell-upload-button]',
+    );
+
+    expect(button).not.toBeNull();
+    expect(button?.getAttribute('aria-label')).toBe('Upload file');
+    act(() => button?.click());
+    expect(openPicker).toHaveBeenCalledTimes(1);
+
+    const hidden = renderChatEditor({ visibleToolbarActions: ['model'] });
+    expect(
+      hidden.querySelector('[data-web-shell-upload-button]'),
+    ).toBeNull();
+  });
+
+  it('supports an explicitly enabled legacy single-workspace daemon', () => {
+    uploadWorkspaceState.current = {
+      client: { uploadWorkspaceFile: vi.fn() },
+      capabilities: {
+        features: ['workspace_file_upload'],
+        workspaceCwd: '/workspace',
+      },
+    };
+    const shown = renderChatEditor({
+      customization: { fileUploadEnabled: true },
+      visibleToolbarActions: ['files'],
+    });
+
+    expect(
+      shown.querySelector('[data-web-shell-upload-input]'),
+    ).not.toBeNull();
+    expect(
+      shown.querySelector('[data-web-shell-upload-button]'),
+    ).not.toBeNull();
+  });
+
   it('fileUploadEnabled={false} force-disables even with the capability', () => {
     uploadWorkspaceState.current = makeWorkspace(['workspace_file_upload']);
     const container = renderChatEditor({

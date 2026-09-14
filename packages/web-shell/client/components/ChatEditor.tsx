@@ -154,6 +154,7 @@ function collectDroppedFiles(dataTransfer: DataTransfer): File[] {
 const ACTIVE_TOOLBAR_ACTIONS = [
   'approvalMode',
   'contextUsage',
+  'files',
   'gitBranch',
   'model',
   'widthMode',
@@ -1573,9 +1574,25 @@ export const ChatEditor = memo(
       const primaryMatches = (
         uploadWorkspace.capabilities?.workspaces ?? []
       ).filter((workspace) => workspace.primary);
-      if (primaryMatches.length !== 1 || primaryMatches[0].trusted !== true)
+      if (primaryMatches.length === 1 && primaryMatches[0].trusted === true) {
+        return { client: uploadWorkspace.client, targetKey: '<primary>' };
+      }
+      // Older single-workspace daemons advertise the upload feature and a
+      // bound workspace CWD, but omit the newer `workspaces` capability list.
+      // A host must explicitly opt in before treating that legacy shape as a
+      // trusted primary workspace; multi-workspace and untrusted entries
+      // remain gated by the checks above.
+      if (
+        fileUploadEnabled !== true ||
+        primaryMatches.length !== 0 ||
+        !uploadWorkspace.capabilities?.workspaceCwd
+      ) {
         return undefined;
-      return { client: uploadWorkspace.client, targetKey: '<primary>' };
+      }
+      return {
+        client: uploadWorkspace.client,
+        targetKey: `<legacy-primary:${uploadWorkspace.capabilities.workspaceCwd}>`,
+      };
     }, [uploadWorkspace, atWorkspaceCwd, fileUploadEnabled]);
     const uploadEnabled = uploadTarget !== undefined;
     const maxUploadBytes =
@@ -2041,6 +2058,7 @@ export const ChatEditor = memo(
     };
     const showModeAction = showToolbarAction('approvalMode');
     const showModelAction = showToolbarAction('model');
+    const showFilesAction = showToolbarAction('files') && uploadEnabled;
     const commandNames = useMemo(
       () =>
         new Set(commands.map((command) => command.name.replace(/^\/+/, ''))),
@@ -3168,6 +3186,28 @@ export const ChatEditor = memo(
                         }
                       />
                     </div>
+                  )}
+                  {showFilesAction && (
+                    <button
+                      type="button"
+                      className={styles.toolBtn}
+                      data-web-shell-upload-button
+                      disabled={disabled}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        core.closeSlashMenu();
+                        core.closeAtMenu();
+                        setQuickActionsOpen(false);
+                        triggerFilePicker(fileUploadDirectory ?? '.');
+                      }}
+                      aria-label={t('at.files.upload')}
+                      title={t('at.files.upload')}
+                      data-tooltip={t('at.files.upload')}
+                    >
+                      <span className={styles.toolBtnIcon}>
+                        <UploadIcon aria-hidden="true" />
+                      </span>
+                    </button>
                   )}
                   {ToolbarEnd && (
                     <div ref={toolbarEndRef} className={styles.toolbarEnd}>
