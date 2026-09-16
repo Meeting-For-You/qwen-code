@@ -37,12 +37,13 @@ objects, access runtime snapshots, or deploy ACS resources.
 
 Artifact URLs include the complete source SHA. The publisher uses a
 single-concurrency group and refuses a partially populated prefix or an
-existing prefix whose checksums differ. The target bucket has versioning
-enabled, so OSS cannot use the server-side `x-oss-forbid-overwrite` control
-for these objects. The publication protocol therefore makes no false claim of
-WORM enforcement: a future requirement for storage-enforced immutability needs
-either a dedicated non-versioned artifact bucket with overwrite prohibition or
-an approved OSS WORM policy.
+existing prefix whose checksums differ. After confirming an empty prefix, it
+uploads without ossutil's force-overwrite flag. The target bucket has
+versioning enabled, so OSS cannot use the server-side `x-oss-forbid-overwrite`
+control for these objects. The publication protocol therefore makes no false
+claim of WORM enforcement: a future requirement for storage-enforced
+immutability needs either a dedicated non-versioned artifact bucket with
+overwrite prohibition or an approved OSS WORM policy.
 
 ## Out of Scope
 

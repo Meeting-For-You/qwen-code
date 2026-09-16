@@ -23,6 +23,7 @@ describe('Meeting Qwen OSS publication workflow', () => {
     expect(workflow).toContain(
       'Artifact prefix is partially populated; refusing to overwrite or complete it.',
     );
+    expect(workflow).toContain('--no-overwrite');
     expect(workflow).toContain('Install closure from public OSS URLs');
   });
 
