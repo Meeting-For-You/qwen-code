@@ -32,7 +32,7 @@ function main(argv) {
     printUsage();
     return;
   }
-  packageArtifacts(options);
+  packageArtifacts(options, { rootDir: options.sourceDir });
 }
 
 function printUsage() {
@@ -43,13 +43,20 @@ Builds a self-contained SDK, WebUI, and Web Shell package set for a fixed Qwen s
 Options:
   --out-dir PATH          New output directory for tarballs and manifest.json.
   --public-base-url URL   Public OSS origin without a path.
+  --source-dir PATH       Checked-out Qwen source directory.
   --source-sha SHA        Full 40-character source commit SHA.
   -h, --help              Show this help message.
 `);
 }
 
 function parseArgs(argv) {
-  const options = { help: false, outDir: '', publicBaseUrl: '', sourceSha: '' };
+  const options = {
+    help: false,
+    outDir: '',
+    publicBaseUrl: '',
+    sourceDir: process.cwd(),
+    sourceSha: '',
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--help' || value === '-h') {
@@ -63,6 +70,11 @@ function parseArgs(argv) {
     }
     if (value === '--public-base-url') {
       options.publicBaseUrl = readOptionValue(argv, index, value);
+      index += 1;
+      continue;
+    }
+    if (value === '--source-dir') {
+      options.sourceDir = readOptionValue(argv, index, value);
       index += 1;
       continue;
     }
@@ -106,6 +118,7 @@ function normalizeOptions(options) {
   return {
     ...options,
     publicBaseUrl: url.origin,
+    sourceDir: path.resolve(options.sourceDir ?? process.cwd()),
     sourceSha: options.sourceSha.toLowerCase(),
   };
 }
@@ -158,7 +171,7 @@ function packageArtifacts(
   const normalized = normalizeOptions(options);
   assertSourceRevision(rootDir, normalized.sourceSha, run);
   assertCleanSourceTree(rootDir, run);
-  const outDir = path.resolve(rootDir, normalized.outDir);
+  const outDir = path.resolve(normalized.outDir);
   if (fs.existsSync(outDir)) fail(`Output directory already exists: ${outDir}`);
 
   const manifests = new Map();

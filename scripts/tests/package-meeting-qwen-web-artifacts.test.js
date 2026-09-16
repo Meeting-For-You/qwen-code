@@ -127,9 +127,15 @@ describe('Meeting Qwen OSS package artifacts', () => {
         'dist/out',
         '--public-base-url',
         'https://example.com',
+        '--source-dir',
+        'source',
         '--source-sha',
         sourceSha,
       ]),
-    ).toMatchObject({ outDir: 'dist/out', sourceSha });
+    ).toMatchObject({
+      outDir: 'dist/out',
+      sourceDir: expect.any(String),
+      sourceSha,
+    });
   });
 });
