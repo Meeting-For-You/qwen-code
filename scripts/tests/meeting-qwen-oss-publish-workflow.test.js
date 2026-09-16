@@ -31,4 +31,28 @@ describe('Meeting Qwen OSS publication workflow', () => {
     expect(workflow).toContain('npm --prefix "$consumer_dir" init --yes');
     expect(workflow).toContain('Install closure from public OSS URLs');
   });
+
+  it('limits anonymous OSS reads to the published artifact prefix', () => {
+    const policy = JSON.parse(
+      readFileSync(
+        'deploy/meeting-qwen-oss-artifact-public-read-policy.json',
+        'utf8',
+      ),
+    );
+
+    expect(policy).toEqual({
+      Version: '1',
+      Statement: [
+        {
+          Sid: 'PublicReadOnlyPublishedQwenArtifacts',
+          Effect: 'Allow',
+          Principal: ['*'],
+          Action: ['oss:GetObject'],
+          Resource: [
+            'acs:oss:*:*:meeting-qwen-artifacts-bj-1012659032087746/npm/qwen-code/*',
+          ],
+        },
+      ],
+    });
+  });
 });

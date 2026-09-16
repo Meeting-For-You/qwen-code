@@ -32,20 +32,20 @@ The publisher uses a dedicated GitHub Environment and a dedicated Alibaba
 Cloud OIDC RAM role. Its policy permits only list, read, and write operations
 under `meeting-qwen-artifacts-bj-1012659032087746/npm/qwen-code/`; it cannot
 delete objects, change ACLs, access runtime snapshots, or deploy ACS resources.
-The dedicated Bucket is public-read so npm can consume immutable tarballs;
-artifact uploads inherit that Bucket ACL and never change an object ACL.
+The dedicated Bucket remains private. Its versioned Bucket Policy grants
+anonymous `GetObject` only under `npm/qwen-code/*`, so npm can consume
+immutable tarballs without exposing unrelated objects. Artifact uploads
+inherit the private Bucket ACL and never change an object ACL.
 
 ## Immutability
 
 Artifact URLs include the complete source SHA. The publisher uses a
 single-concurrency group and refuses a partially populated prefix or an
 existing prefix whose checksums differ. After confirming an empty prefix, it
-uploads without ossutil's force-overwrite flag. The target bucket has
-versioning enabled, so OSS cannot use the server-side `x-oss-forbid-overwrite`
-control for these objects. The publication protocol therefore makes no false
-claim of WORM enforcement: a future requirement for storage-enforced
-immutability needs either a dedicated non-versioned artifact bucket with
-overwrite prohibition or an approved OSS WORM policy.
+uploads without ossutil's force-overwrite flag and supplies the server-side
+`x-oss-forbid-overwrite` control. The target is a dedicated non-versioned
+artifact Bucket, so the service rejects any later overwrite of a published
+object.
 
 ## Out of Scope
 
