@@ -93,7 +93,8 @@
     "check:desktop-isolation": "node scripts/check-desktop-isolation.js",
     "check:serve-fast-path-bundle": "node scripts/clean-package-build-artifacts.js && npm run build -- --cli-only && cross-env DEV=true npm run bundle && node scripts/check-serve-fast-path-bundle.js",
     "clean": "node scripts/clean.js",
-    "pre-commit": "node scripts/pre-commit.js"
+    "pre-commit": "node scripts/pre-commit.js",
+    "package:meeting-qwen-web-artifacts": "node scripts/package-meeting-qwen-web-artifacts.js"
   },
   "overrides": {
     "ansi-regex": "6.2.2",

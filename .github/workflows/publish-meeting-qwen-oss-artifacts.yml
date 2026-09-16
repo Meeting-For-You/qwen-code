@@ -1,0 +1,132 @@
+name: 'Publish Meeting Qwen OSS Artifacts'
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Complete Qwen source commit SHA to build and publish.'
+        required: true
+        type: 'string'
+
+concurrency:
+  group: 'publish-meeting-qwen-oss-artifacts'
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: 'ubuntu-latest'
+    environment:
+      name: 'qwen-oss-artifacts'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    env:
+      SOURCE_SHA: '${{ inputs.source_sha }}'
+      OSS_BUCKET: 'schedule-agent-staging-bj'
+      OSS_ENDPOINT: 'https://oss-cn-beijing.aliyuncs.com'
+      OSS_PUBLIC_BASE_URL: 'https://schedule-agent-staging-bj.oss-cn-beijing.aliyuncs.com'
+      OSS_PREFIX: 'npm/qwen-code/${{ inputs.source_sha }}'
+      ALIBABA_CLOUD_ROLE_ARN: 'acs:ram::1012659032087746:role/qwenossartifactpublisherrole'
+      ALIBABA_CLOUD_OIDC_PROVIDER_ARN: 'acs:ram::1012659032087746:oidc-provider/github-actions'
+    steps:
+      - name: 'Validate source SHA'
+        run: |-
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: 'Checkout source'
+        uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # v6.0.2
+        with:
+          ref: '${{ inputs.source_sha }}'
+          fetch-depth: 1
+
+      - name: 'Confirm exact source revision'
+        run: |-
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: 'Set up Node.js'
+        uses: 'actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e' # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: 'Install, patch, and build source'
+        run: |-
+          npm ci --no-audit --progress=false
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: 'Verify artifact packager'
+        run: |-
+          npx vitest run --config scripts/tests/vitest.config.ts scripts/tests/package-meeting-qwen-web-artifacts.test.js
+
+      - name: 'Pack Qwen web artifact closure'
+        run: |-
+          npm run package:meeting-qwen-web-artifacts -- \
+            --out-dir dist/meeting-qwen-oss-artifacts \
+            --public-base-url "$OSS_PUBLIC_BASE_URL" \
+            --source-sha "$SOURCE_SHA"
+
+      - name: 'Install ossutil'
+        env:
+          OSSUTIL_URL: 'https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip'
+          OSSUTIL_SHA256: 'dcc512e4a893e16bbee63bc769339d8e56b21744fd83c8212a9d8baf28767343'
+        run: |-
+          set -euo pipefail
+          temp_dir="$(mktemp -d)"
+          curl -fsSL --connect-timeout 15 --max-time 300 "$OSSUTIL_URL" -o "$temp_dir/ossutil.zip"
+          echo "$OSSUTIL_SHA256  $temp_dir/ossutil.zip" | sha256sum -c -
+          unzip -q "$temp_dir/ossutil.zip" -d "$temp_dir"
+          ossutil_path="$(find "$temp_dir" -type f \( -name ossutil -o -name ossutil64 \) -print -quit)"
+          test -n "$ossutil_path"
+          install -m 0755 "$ossutil_path" "$RUNNER_TEMP/ossutil"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: 'Configure Alibaba Cloud OIDC credentials'
+        uses: 'aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6' # v1
+        with:
+          role-to-assume: '${{ env.ALIBABA_CLOUD_ROLE_ARN }}'
+          oidc-provider-arn: '${{ env.ALIBABA_CLOUD_OIDC_PROVIDER_ARN }}'
+          role-session-name: 'qwen-oss-artifact-publisher'
+          audience: 'sts.aliyuncs.com'
+
+      - name: 'Configure ossutil'
+        run: |-
+          ossutil config -e "$OSS_ENDPOINT" -i "$ALIBABA_CLOUD_ACCESS_KEY_ID" -k "$ALIBABA_CLOUD_ACCESS_KEY_SECRET" -t "$ALIBABA_CLOUD_SECURITY_TOKEN" -L EN -c "$RUNNER_TEMP/ossutilconfig"
+
+      - name: 'Publish or verify immutable artifact prefix'
+        run: |-
+          set -euo pipefail
+          artifact_dir='dist/meeting-qwen-oss-artifacts'
+          mapfile -t assets < <(find "$artifact_dir" -maxdepth 1 -type f \( -name '*.tgz' -o -name manifest.json \) -print | sort)
+          test "${#assets[@]}" = 4
+          existing=0
+          for asset in "${assets[@]}"; do
+            if ossutil stat "oss://$OSS_BUCKET/$OSS_PREFIX/$(basename "$asset")" -c "$RUNNER_TEMP/ossutilconfig" >/dev/null 2>&1; then
+              existing=$((existing + 1))
+            fi
+          done
+          if [ "$existing" = 0 ]; then
+            node scripts/upload-aliyun-oss-assets.js --bucket "$OSS_BUCKET" --config "$RUNNER_TEMP/ossutilconfig" --prefix "$OSS_PREFIX" "${assets[@]}"
+          elif [ "$existing" = "${#assets[@]}" ]; then
+            remote_dir="$(mktemp -d)"
+            for asset in "${assets[@]}"; do
+              ossutil cp "oss://$OSS_BUCKET/$OSS_PREFIX/$(basename "$asset")" "$remote_dir/$(basename "$asset")" -c "$RUNNER_TEMP/ossutilconfig"
+            done
+            (cd "$remote_dir" && sha256sum -c <(jq -r '.artifacts[] | "\(.sha256)  \(.file)"' manifest.json))
+            cmp -s "$artifact_dir/manifest.json" "$remote_dir/manifest.json"
+          else
+            echo '::error::Artifact prefix is partially populated; refusing to overwrite or complete it.'
+            exit 1
+          fi
+
+      - name: 'Install closure from public OSS URLs'
+        run: |-
+          set -euo pipefail
+          consumer_dir="$(mktemp -d)"
+          trap 'rm -rf "$consumer_dir" "$RUNNER_TEMP/ossutilconfig"' EXIT
+          npm init --yes --prefix "$consumer_dir" >/dev/null
+          mapfile -t urls < <(jq -r '.artifacts[].url' dist/meeting-qwen-oss-artifacts/manifest.json)
+          npm install --prefix "$consumer_dir" --no-audit --no-fund "${urls[@]}"
+          ! rg --fixed-strings 'file:' "$consumer_dir/package-lock.json"
+          ! rg --fixed-strings 'github.com/Meeting-For-You/qwen-code' "$consumer_dir/package-lock.json"
