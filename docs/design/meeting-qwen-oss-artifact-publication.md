@@ -2,29 +2,36 @@
 
 ## Goal
 
-Publish the SDK, WebUI, and Web Shell consumed by Meeting For You as one
-source-SHA-scoped OSS artifact closure. Frontend builds must not fetch a GitHub
-archive or a local `file:` package.
+Publish the Qwen dependencies consumed by Meeting For You as immutable,
+source-SHA-scoped OSS artifact closures. Frontend builds and daemon image
+builds must not fetch a GitHub archive or a local `file:` package.
 
 ## Publication Boundary
 
-The manually dispatched publisher checks out one immutable source commit. The
-source worktree runs its normal `npm ci`, which applies the committed Ink patch
+The manually dispatched publisher checks out two isolated directories: the
+reviewed publisher code from the workflow revision and the requested immutable
+Qwen source. Only scripts in the reviewed publisher directory receive the
+Alibaba Cloud OIDC credentials or upload capability.
+
+`web` sources run their normal `npm ci`, which applies the committed Ink patch
 and builds every workspace package. The build must leave the tracked source
-tree clean before the publisher packs the three frontend packages.
+tree clean before the publisher packs the three frontend packages. `runtime`
+sources are already-built CLI release commits, so they are never installed or
+executed: the publisher validates and packages their committed files directly.
 
 ```text
-reviewed workflow + source SHA
-  -> npm ci (patch + full build)
-  -> SDK / WebUI / Web Shell tarballs
+reviewed publisher + source SHA
+  -> web: npm ci (patch + full build) / runtime: no source execution
+  -> SDK / WebUI / Web Shell tarballs or one CLI runtime tarball
   -> package manifest closure check
   -> OSS npm/qwen-code/<source SHA>/
   -> clean consumer install from OSS URLs
 ```
 
 WebUI's local SDK dependency is replaced inside the packed archive with the
-SDK tarball URL for the same source SHA. Packed dependency metadata rejects
-`file:` and GitHub dependency specifications.
+SDK tarball URL for the same source SHA. The runtime closure verifies its
+command entry points, worker and Web Shell asset. Packed dependency metadata
+rejects `file:` and GitHub dependency specifications.
 
 ## Access Boundary
 

@@ -15,11 +15,32 @@ describe('Meeting Qwen OSS publication workflow', () => {
     expect(workflow).not.toMatch(/playwright|chromium/i);
   });
 
-  it('builds the exact source revision and checks the packed OSS closure', () => {
-    expect(workflow).toContain('test "$(git rev-parse HEAD)" = "$SOURCE_SHA"');
-    expect(workflow).toContain('npm ci --no-audit --progress=false');
-    expect(workflow).toContain('git diff --exit-code');
-    expect(workflow).toContain('package:meeting-qwen-web-artifacts');
+  it('uses reviewed publisher scripts to package the exact requested source revision', () => {
+    expect(workflow).toContain("path: 'publisher'");
+    expect(workflow).toContain("ref: 'main'");
+    expect(workflow).toContain("path: 'source'");
+    expect(workflow).toContain(
+      'test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"',
+    );
+    expect(workflow).toContain("ARTIFACT_KIND: '${{ inputs.artifact_kind }}'");
+    expect(workflow).toContain(
+      'npm --prefix publisher ci --ignore-scripts --no-audit --progress=false',
+    );
+    expect(workflow).toContain(
+      'npm --prefix source ci --no-audit --progress=false',
+    );
+    expect(workflow).toContain(
+      'node publisher/scripts/package-meeting-qwen-web-artifacts.js',
+    );
+    expect(workflow).toContain(
+      'node publisher/scripts/package-meeting-qwen-runtime-artifact.js',
+    );
+    expect(workflow).toContain('--source-dir source');
+    expect(workflow).toContain(
+      "artifact_dir='publisher/dist/meeting-qwen-oss-artifacts'",
+    );
+    expect(workflow).toContain('expected_assets=4');
+    expect(workflow).toContain('expected_assets=2');
     expect(workflow).toContain('--no-overwrite');
     expect(workflow).toContain('--inherit-bucket-acl');
     expect(workflow).toContain(
@@ -30,6 +51,9 @@ describe('Meeting Qwen OSS publication workflow', () => {
     );
     expect(workflow).toContain('npm --prefix "$consumer_dir" init --yes');
     expect(workflow).toContain('Install closure from public OSS URLs');
+    expect(workflow).not.toContain(
+      'node source/scripts/upload-aliyun-oss-assets.js',
+    );
   });
 
   it('limits anonymous OSS reads to the published artifact prefix', () => {

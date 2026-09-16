@@ -4,9 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: 'Complete Qwen source commit SHA to build and publish.'
+        description: 'Complete Qwen source commit SHA to publish.'
         required: true
         type: 'string'
+      artifact_kind:
+        description: 'Artifact closure to publish from the source commit.'
+        required: true
+        type: 'choice'
+        options:
+          - 'web'
+          - 'runtime'
 
 concurrency:
   group: 'publish-meeting-qwen-oss-artifacts'
@@ -22,6 +29,7 @@ jobs:
       id-token: 'write'
     env:
       SOURCE_SHA: '${{ inputs.source_sha }}'
+      ARTIFACT_KIND: '${{ inputs.artifact_kind }}'
       OSS_BUCKET: 'meeting-qwen-artifacts-bj-1012659032087746'
       OSS_ENDPOINT: 'https://oss-cn-beijing.aliyuncs.com'
       OSS_PUBLIC_BASE_URL: 'https://meeting-qwen-artifacts-bj-1012659032087746.oss-cn-beijing.aliyuncs.com'
@@ -33,38 +41,66 @@ jobs:
         run: |-
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-      - name: 'Checkout source'
+      - name: 'Checkout reviewed publisher'
         uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # v6.0.2
         with:
+          path: 'publisher'
+          ref: 'main'
+          fetch-depth: 1
+
+      - name: 'Checkout requested source'
+        uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # v6.0.2
+        with:
+          path: 'source'
           ref: '${{ inputs.source_sha }}'
           fetch-depth: 1
 
       - name: 'Confirm exact source revision'
         run: |-
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
 
       - name: 'Set up Node.js'
         uses: 'actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e' # v6.4.0
         with:
-          node-version-file: '.nvmrc'
+          node-version-file: 'publisher/.nvmrc'
           cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache-dependency-path: 'publisher/package-lock.json'
 
-      - name: 'Install, patch, and build source'
+      - name: 'Install publisher test tools'
         run: |-
-          npm ci --no-audit --progress=false
-          git diff --exit-code
-          test -z "$(git status --porcelain --untracked-files=no)"
+          npm --prefix publisher ci --ignore-scripts --no-audit --progress=false
+
+      - name: 'Build web source'
+        if: "${{ inputs.artifact_kind == 'web' }}"
+        run: |-
+          npm --prefix source ci --no-audit --progress=false
+          git -C source diff --exit-code
+          test -z "$(git -C source status --porcelain --untracked-files=no)"
 
       - name: 'Verify artifact packager'
         run: |-
-          npx vitest run --config scripts/tests/vitest.config.ts scripts/tests/package-meeting-qwen-web-artifacts.test.js
+          npx --prefix publisher vitest run --config publisher/scripts/tests/vitest.config.ts \
+            publisher/scripts/tests/upload-aliyun-oss-assets.test.js \
+            publisher/scripts/tests/package-meeting-qwen-web-artifacts.test.js \
+            publisher/scripts/tests/package-meeting-qwen-runtime-artifact.test.js \
+            publisher/scripts/tests/meeting-qwen-oss-publish-workflow.test.js
 
       - name: 'Pack Qwen web artifact closure'
+        if: "${{ inputs.artifact_kind == 'web' }}"
         run: |-
-          npm run package:meeting-qwen-web-artifacts -- \
-            --out-dir dist/meeting-qwen-oss-artifacts \
+          node publisher/scripts/package-meeting-qwen-web-artifacts.js \
+            --out-dir publisher/dist/meeting-qwen-oss-artifacts \
             --public-base-url "$OSS_PUBLIC_BASE_URL" \
+            --source-dir source \
+            --source-sha "$SOURCE_SHA"
+
+      - name: 'Pack Qwen runtime artifact'
+        if: "${{ inputs.artifact_kind == 'runtime' }}"
+        run: |-
+          node publisher/scripts/package-meeting-qwen-runtime-artifact.js \
+            --out-dir publisher/dist/meeting-qwen-oss-artifacts \
+            --public-base-url "$OSS_PUBLIC_BASE_URL" \
+            --source-dir source \
             --source-sha "$SOURCE_SHA"
 
       - name: 'Install ossutil'
@@ -97,9 +133,10 @@ jobs:
       - name: 'Publish or verify immutable artifact prefix'
         run: |-
           set -euo pipefail
-          artifact_dir='dist/meeting-qwen-oss-artifacts'
+          artifact_dir='publisher/dist/meeting-qwen-oss-artifacts'
           mapfile -t assets < <(find "$artifact_dir" -maxdepth 1 -type f \( -name '*.tgz' -o -name manifest.json \) -print | sort)
-          test "${#assets[@]}" = 4
+          if [ "$ARTIFACT_KIND" = 'web' ]; then expected_assets=4; else expected_assets=2; fi
+          test "${#assets[@]}" = "$expected_assets"
           existing=0
           for asset in "${assets[@]}"; do
             if ossutil stat "oss://$OSS_BUCKET/$OSS_PREFIX/$(basename "$asset")" -c "$RUNNER_TEMP/ossutilconfig" >/dev/null 2>&1; then
@@ -107,7 +144,7 @@ jobs:
             fi
           done
           if [ "$existing" = 0 ]; then
-            node scripts/upload-aliyun-oss-assets.js --bucket "$OSS_BUCKET" --config "$RUNNER_TEMP/ossutilconfig" --inherit-bucket-acl --no-overwrite --prefix "$OSS_PREFIX" "${assets[@]}"
+            node publisher/scripts/upload-aliyun-oss-assets.js --bucket "$OSS_BUCKET" --config "$RUNNER_TEMP/ossutilconfig" --inherit-bucket-acl --no-overwrite --prefix "$OSS_PREFIX" "${assets[@]}"
           elif [ "$existing" = "${#assets[@]}" ]; then
             remote_dir="$(mktemp -d)"
             for asset in "${assets[@]}"; do
@@ -126,7 +163,7 @@ jobs:
           consumer_dir="$(mktemp -d)"
           trap 'rm -rf "$consumer_dir" "$RUNNER_TEMP/ossutilconfig"' EXIT
           npm --prefix "$consumer_dir" init --yes >/dev/null
-          mapfile -t urls < <(jq -r '.artifacts[].url' dist/meeting-qwen-oss-artifacts/manifest.json)
+          mapfile -t urls < <(jq -r '.artifacts[].url' publisher/dist/meeting-qwen-oss-artifacts/manifest.json)
           npm install --prefix "$consumer_dir" --no-audit --no-fund "${urls[@]}"
           ! rg --fixed-strings 'file:' "$consumer_dir/package-lock.json"
           ! rg --fixed-strings 'github.com/Meeting-For-You/qwen-code' "$consumer_dir/package-lock.json"
