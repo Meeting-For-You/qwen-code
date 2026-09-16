@@ -39,6 +39,7 @@ Uploads local release assets to a public Aliyun OSS prefix via ossutil.
 Options:
   --bucket NAME       OSS bucket name.
   --config PATH       ossutil config path.
+  --inherit-bucket-acl  Do not set an object ACL during upload.
   --no-overwrite      Do not pass ossutil's force-overwrite flag.
   --prefix PREFIX     Destination object prefix.
   -h, --help          Show this help message.
@@ -48,6 +49,7 @@ Options:
 function parseUploadArgs(argv) {
   const args = {
     assets: [],
+    acl: 'public-read',
     bucket: '',
     config: '',
     force: true,
@@ -69,6 +71,10 @@ function parseUploadArgs(argv) {
     if (arg === '--config') {
       args.config = readOptionValue(argv, index, arg);
       index += 1;
+      continue;
+    }
+    if (arg === '--inherit-bucket-acl') {
+      args.acl = '';
       continue;
     }
     if (arg === '--no-overwrite') {
@@ -106,7 +112,7 @@ function parseUploadArgs(argv) {
 }
 
 function uploadAssets(
-  { assets, bucket, config, force = true, prefix },
+  { acl = 'public-read', assets, bucket, config, force = true, prefix },
   { ossutilCommand = 'ossutil', ossutilCommandArgs = [] } = {},
 ) {
   for (const asset of assets) {
@@ -114,6 +120,7 @@ function uploadAssets(
     uploadWithRetry(asset, bucket, key, config, {
       ossutilCommand,
       ossutilCommandArgs,
+      acl,
       force,
     });
   }
@@ -124,7 +131,7 @@ function uploadWithRetry(
   bucket,
   key,
   config,
-  { ossutilCommand, ossutilCommandArgs, force },
+  { acl, ossutilCommand, ossutilCommandArgs, force },
 ) {
   for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
     const result = spawnSync(
@@ -136,9 +143,8 @@ function uploadWithRetry(
         `oss://${bucket}/${key}`,
         '-c',
         config,
-        ...(force ? ['-f'] : []),
-        '--acl',
-        'public-read',
+        ...(force ? ['-f'] : ['--meta', 'x-oss-forbid-overwrite:true']),
+        ...(acl ? ['--acl', acl] : []),
       ],
       { stdio: 'inherit' },
     );
