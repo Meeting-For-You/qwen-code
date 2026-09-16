@@ -29,6 +29,10 @@ describe('Meeting Qwen OSS publication workflow', () => {
     expect(workflow).toContain(
       'npm --prefix source ci --no-audit --progress=false',
     );
+    expect(workflow).toContain('cd publisher');
+    expect(workflow).toContain(
+      'npx vitest run --config scripts/tests/vitest.config.ts',
+    );
     expect(workflow).toContain(
       'node publisher/scripts/package-meeting-qwen-web-artifacts.js',
     );

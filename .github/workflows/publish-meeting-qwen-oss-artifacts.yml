@@ -79,11 +79,12 @@ jobs:
 
       - name: 'Verify artifact packager'
         run: |-
-          npx --prefix publisher vitest run --config publisher/scripts/tests/vitest.config.ts \
-            publisher/scripts/tests/upload-aliyun-oss-assets.test.js \
-            publisher/scripts/tests/package-meeting-qwen-web-artifacts.test.js \
-            publisher/scripts/tests/package-meeting-qwen-runtime-artifact.test.js \
-            publisher/scripts/tests/meeting-qwen-oss-publish-workflow.test.js
+          cd publisher
+          npx vitest run --config scripts/tests/vitest.config.ts \
+            scripts/tests/upload-aliyun-oss-assets.test.js \
+            scripts/tests/package-meeting-qwen-web-artifacts.test.js \
+            scripts/tests/package-meeting-qwen-runtime-artifact.test.js \
+            scripts/tests/meeting-qwen-oss-publish-workflow.test.js
 
       - name: 'Pack Qwen web artifact closure'
         if: "${{ inputs.artifact_kind == 'web' }}"
