@@ -5,7 +5,7 @@
       "Sid": "ListOnlyQwenArtifactPrefix",
       "Effect": "Allow",
       "Action": ["oss:ListObjects"],
-      "Resource": ["acs:oss:*:*:schedule-agent-staging-bj"],
+      "Resource": ["acs:oss:*:*:meeting-qwen-artifacts-bj-1012659032087746"],
       "Condition": {
         "StringLike": {
           "oss:prefix": ["npm/qwen-code/*"]
@@ -15,8 +15,10 @@
     {
       "Sid": "ReadWriteOnlyQwenArtifacts",
       "Effect": "Allow",
-      "Action": ["oss:GetObject", "oss:PutObject", "oss:PutObjectAcl"],
-      "Resource": ["acs:oss:*:*:schedule-agent-staging-bj/npm/qwen-code/*"]
+      "Action": ["oss:GetObject", "oss:PutObject"],
+      "Resource": [
+        "acs:oss:*:*:meeting-qwen-artifacts-bj-1012659032087746/npm/qwen-code/*"
+      ]
     }
   ]
 }

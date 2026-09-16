@@ -22,9 +22,9 @@ jobs:
       id-token: 'write'
     env:
       SOURCE_SHA: '${{ inputs.source_sha }}'
-      OSS_BUCKET: 'schedule-agent-staging-bj'
+      OSS_BUCKET: 'meeting-qwen-artifacts-bj-1012659032087746'
       OSS_ENDPOINT: 'https://oss-cn-beijing.aliyuncs.com'
-      OSS_PUBLIC_BASE_URL: 'https://schedule-agent-staging-bj.oss-cn-beijing.aliyuncs.com'
+      OSS_PUBLIC_BASE_URL: 'https://meeting-qwen-artifacts-bj-1012659032087746.oss-cn-beijing.aliyuncs.com'
       OSS_PREFIX: 'npm/qwen-code/${{ inputs.source_sha }}'
       ALIBABA_CLOUD_ROLE_ARN: 'acs:ram::1012659032087746:role/qwenossartifactpublisherrole'
       ALIBABA_CLOUD_OIDC_PROVIDER_ARN: 'acs:ram::1012659032087746:oidc-provider/github-actions'
@@ -107,7 +107,7 @@ jobs:
             fi
           done
           if [ "$existing" = 0 ]; then
-            node scripts/upload-aliyun-oss-assets.js --bucket "$OSS_BUCKET" --config "$RUNNER_TEMP/ossutilconfig" --no-overwrite --prefix "$OSS_PREFIX" "${assets[@]}"
+            node scripts/upload-aliyun-oss-assets.js --bucket "$OSS_BUCKET" --config "$RUNNER_TEMP/ossutilconfig" --inherit-bucket-acl --no-overwrite --prefix "$OSS_PREFIX" "${assets[@]}"
           elif [ "$existing" = "${#assets[@]}" ]; then
             remote_dir="$(mktemp -d)"
             for asset in "${assets[@]}"; do
