@@ -55,6 +55,22 @@ describe('parseUploadArgs', () => {
     expect(args.prefix).toBe('installation');
   });
 
+  it('parses immutable private-artifact upload options', () => {
+    expect(
+      parseUploadArgs([
+        '--bucket',
+        'b',
+        '--config',
+        'c',
+        '--inherit-bucket-acl',
+        '--no-overwrite',
+        '--prefix',
+        'npm/qwen-code/source-sha',
+        'asset.tgz',
+      ]),
+    ).toMatchObject({ force: false, inheritBucketAcl: true });
+  });
+
   it.each([
     [['--bucket', 'b', '--config', 'c', 'asset.txt'], '--prefix'],
     [['--config', 'c', '--prefix', 'p', 'asset.txt'], '--bucket'],
@@ -143,6 +159,36 @@ describe('uploadAssets (integration)', () => {
       );
       expect(log).toContain(`-c\n${configPath}`);
       expect(log).toContain('--acl\npublic-read');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('does not change ACL or pass force-overwrite for immutable private artifacts', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen-upload-private-'));
+    try {
+      const { logPath, ossutilCommand, ossutilCommandArgs } =
+        makeOssutilShim(tmp);
+      const assetPath = path.join(tmp, 'asset.tgz');
+      const configPath = path.join(tmp, '.ossutilconfig');
+      fs.writeFileSync(assetPath, 'asset');
+      fs.writeFileSync(configPath, '[Credentials]\n');
+
+      uploadAssets(
+        {
+          assets: [assetPath],
+          bucket: 'qwen-test-bucket',
+          config: configPath,
+          force: false,
+          inheritBucketAcl: true,
+          prefix: 'npm/qwen-code/source-sha',
+        },
+        { ossutilCommand, ossutilCommandArgs },
+      );
+
+      const args = fs.readFileSync(logPath, 'utf8').split(/\r?\n/);
+      expect(args).not.toContain('-f');
+      expect(args).not.toContain('--acl');
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

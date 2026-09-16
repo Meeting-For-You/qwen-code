@@ -54,11 +54,13 @@ function resolveAttemptTimeoutMs() {
 function printUsage() {
   console.log(`Usage: node scripts/upload-aliyun-oss-assets.js [options] ASSET...
 
-Uploads local assets to a public Aliyun OSS prefix via ossutil.
+Uploads local assets to an Aliyun OSS prefix via ossutil.
 
 Options:
   --bucket NAME       OSS bucket name.
   --config PATH       ossutil config path.
+  --inherit-bucket-acl  Do not set an object ACL.
+  --no-overwrite      Do not pass ossutil's force-overwrite flag.
   --prefix PREFIX     Destination object prefix.
   -h, --help          Show this help message.
 `);
@@ -69,7 +71,9 @@ function parseUploadArgs(argv) {
     assets: [],
     bucket: '',
     config: '',
+    force: true,
     help: false,
+    inheritBucketAcl: false,
     prefix: '',
   };
 
@@ -87,6 +91,14 @@ function parseUploadArgs(argv) {
     if (arg === '--config') {
       args.config = readOptionValue(argv, index, arg);
       index += 1;
+      continue;
+    }
+    if (arg === '--inherit-bucket-acl') {
+      args.inheritBucketAcl = true;
+      continue;
+    }
+    if (arg === '--no-overwrite') {
+      args.force = false;
       continue;
     }
     if (arg === '--prefix') {
@@ -120,7 +132,7 @@ function parseUploadArgs(argv) {
 }
 
 function uploadAssets(
-  { assets, bucket, config, prefix },
+  { assets, bucket, config, force = true, inheritBucketAcl = false, prefix },
   {
     ossutilCommand = 'ossutil',
     ossutilCommandArgs = [],
@@ -133,6 +145,8 @@ function uploadAssets(
       ossutilCommand,
       ossutilCommandArgs,
       attemptTimeoutMs,
+      force,
+      inheritBucketAcl,
     });
   }
 }
@@ -142,7 +156,13 @@ function uploadWithRetry(
   bucket,
   key,
   config,
-  { ossutilCommand, ossutilCommandArgs, attemptTimeoutMs },
+  {
+    ossutilCommand,
+    ossutilCommandArgs,
+    attemptTimeoutMs,
+    force,
+    inheritBucketAcl,
+  },
 ) {
   for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
     const result = spawnSync(
@@ -154,9 +174,8 @@ function uploadWithRetry(
         `oss://${bucket}/${key}`,
         '-c',
         config,
-        '-f',
-        '--acl',
-        'public-read',
+        ...(force ? ['-f'] : []),
+        ...(inheritBucketAcl ? [] : ['--acl', 'public-read']),
       ],
       {
         stdio: 'inherit',
