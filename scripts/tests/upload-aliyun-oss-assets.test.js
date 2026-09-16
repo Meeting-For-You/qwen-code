@@ -34,6 +34,7 @@ describe('parseUploadArgs', () => {
       config: '/tmp/.ossutilconfig',
       prefix: 'releases/qwen-code/v1.2.3',
       assets: ['a.tar.gz', 'b.zip'],
+      force: true,
       help: false,
     });
   });
@@ -49,6 +50,21 @@ describe('parseUploadArgs', () => {
       'one.txt',
     ]);
     expect(args.prefix).toBe('installation');
+  });
+
+  it('opts out of force-overwrite only when requested', () => {
+    const args = parseUploadArgs([
+      '--bucket',
+      'b',
+      '--config',
+      'c',
+      '--no-overwrite',
+      '--prefix',
+      'p',
+      'asset.txt',
+    ]);
+
+    expect(args.force).toBe(false);
   });
 
   it.each([
@@ -134,7 +150,37 @@ describe('uploadAssets (integration)', () => {
         `oss://qwen-test-bucket/releases/qwen-code/v0.0.0/b.zip`,
       );
       expect(log).toContain(`-c\n${configPath}`);
+      expect(log).toContain('-f');
       expect(log).toContain('--acl\npublic-read');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('does not pass the force-overwrite flag when disabled', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen-upload-safe-'));
+    try {
+      const { logPath, ossutilCommand, ossutilCommandArgs } =
+        makeOssutilShim(tmp);
+      const assetPath = path.join(tmp, 'asset.tar.gz');
+      const configPath = path.join(tmp, '.ossutilconfig');
+      fs.writeFileSync(assetPath, 'asset');
+      fs.writeFileSync(configPath, '[Credentials]\n');
+
+      uploadAssets(
+        {
+          assets: [assetPath],
+          bucket: 'qwen-test-bucket',
+          config: configPath,
+          force: false,
+          prefix: 'npm/qwen-code/source-sha',
+        },
+        { ossutilCommand, ossutilCommandArgs },
+      );
+
+      expect(fs.readFileSync(logPath, 'utf8').split(/\r?\n/)).not.toContain(
+        '-f',
+      );
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

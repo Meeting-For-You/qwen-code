@@ -670,7 +670,8 @@ jobs:
         !cancelled() &&
         (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') &&
         needs.classify_pr.outputs.skip_ci != 'true' &&
-        needs.test.outputs.ci_profile == 'full'
+        needs.test.outputs.ci_profile == 'full' &&
+        vars.QWEN_ENABLE_CLOUD_BROWSER_E2E == 'true'
       }}
     runs-on: '${{ fromJSON(needs.classify_pr.outputs.ubuntu_runner || ''["ubuntu-latest"]'') }}'
     timeout-minutes: 20

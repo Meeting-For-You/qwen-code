@@ -1,0 +1,22 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Sid": "ListOnlyQwenArtifactPrefix",
+      "Effect": "Allow",
+      "Action": ["oss:ListObjects"],
+      "Resource": ["acs:oss:*:*:schedule-agent-staging-bj"],
+      "Condition": {
+        "StringLike": {
+          "oss:prefix": ["npm/qwen-code/*"]
+        }
+      }
+    },
+    {
+      "Sid": "ReadWriteOnlyQwenArtifacts",
+      "Effect": "Allow",
+      "Action": ["oss:GetObject", "oss:PutObject", "oss:PutObjectAcl"],
+      "Resource": ["acs:oss:*:*:schedule-agent-staging-bj/npm/qwen-code/*"]
+    }
+  ]
+}

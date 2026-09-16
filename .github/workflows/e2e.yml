@@ -265,7 +265,7 @@ jobs:
     name: 'web-shell Browser Regression'
     runs-on: 'ubuntu-latest'
     if: |-
-      ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+      ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.QWEN_ENABLE_CLOUD_BROWSER_E2E == 'true' }}
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' # v6.0.2

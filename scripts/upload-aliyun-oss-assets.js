@@ -39,6 +39,7 @@ Uploads local release assets to a public Aliyun OSS prefix via ossutil.
 Options:
   --bucket NAME       OSS bucket name.
   --config PATH       ossutil config path.
+  --no-overwrite      Do not pass ossutil's force-overwrite flag.
   --prefix PREFIX     Destination object prefix.
   -h, --help          Show this help message.
 `);
@@ -49,6 +50,7 @@ function parseUploadArgs(argv) {
     assets: [],
     bucket: '',
     config: '',
+    force: true,
     help: false,
     prefix: '',
   };
@@ -67,6 +69,10 @@ function parseUploadArgs(argv) {
     if (arg === '--config') {
       args.config = readOptionValue(argv, index, arg);
       index += 1;
+      continue;
+    }
+    if (arg === '--no-overwrite') {
+      args.force = false;
       continue;
     }
     if (arg === '--prefix') {
@@ -100,7 +106,7 @@ function parseUploadArgs(argv) {
 }
 
 function uploadAssets(
-  { assets, bucket, config, prefix },
+  { assets, bucket, config, force = true, prefix },
   { ossutilCommand = 'ossutil', ossutilCommandArgs = [] } = {},
 ) {
   for (const asset of assets) {
@@ -108,6 +114,7 @@ function uploadAssets(
     uploadWithRetry(asset, bucket, key, config, {
       ossutilCommand,
       ossutilCommandArgs,
+      force,
     });
   }
 }
@@ -117,7 +124,7 @@ function uploadWithRetry(
   bucket,
   key,
   config,
-  { ossutilCommand, ossutilCommandArgs },
+  { ossutilCommand, ossutilCommandArgs, force },
 ) {
   for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
     const result = spawnSync(
@@ -129,7 +136,7 @@ function uploadWithRetry(
         `oss://${bucket}/${key}`,
         '-c',
         config,
-        '-f',
+        ...(force ? ['-f'] : []),
         '--acl',
         'public-read',
       ],
