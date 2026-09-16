@@ -1,0 +1,18 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Federated": ["acs:ram::1012659032087746:oidc-provider/github-actions"]
+      },
+      "Condition": {
+        "StringEquals": {
+          "oidc:aud": "sts.aliyuncs.com",
+          "oidc:sub": "repo:Meeting-For-You@232726817/qwen-code@1360261656:environment:qwen-oss-artifacts"
+        }
+      }
+    }
+  ]
+}
