@@ -1,0 +1,14 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Sid": "PublicReadOnlyPublishedQwenArtifacts",
+      "Effect": "Allow",
+      "Principal": ["*"],
+      "Action": ["oss:GetObject"],
+      "Resource": [
+        "acs:oss:*:*:meeting-qwen-artifacts-bj-1012659032087746/npm/qwen-code/*"
+      ]
+    }
+  ]
+}
