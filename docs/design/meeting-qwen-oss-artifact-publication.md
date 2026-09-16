@@ -29,9 +29,11 @@ SDK tarball URL for the same source SHA. Packed dependency metadata rejects
 ## Access Boundary
 
 The publisher uses a dedicated GitHub Environment and a dedicated Alibaba
-Cloud OIDC RAM role. Its policy permits only list, read, write, and object ACL
-operations under `schedule-agent-staging-bj/npm/qwen-code/`; it cannot delete
-objects, access runtime snapshots, or deploy ACS resources.
+Cloud OIDC RAM role. Its policy permits only list, read, and write operations
+under `meeting-qwen-artifacts-bj-1012659032087746/npm/qwen-code/`; it cannot
+delete objects, change ACLs, access runtime snapshots, or deploy ACS resources.
+The dedicated Bucket is public-read so npm can consume immutable tarballs;
+artifact uploads inherit that Bucket ACL and never change an object ACL.
 
 ## Immutability
 

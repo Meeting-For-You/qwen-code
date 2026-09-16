@@ -21,6 +21,10 @@ describe('Meeting Qwen OSS publication workflow', () => {
     expect(workflow).toContain('git diff --exit-code');
     expect(workflow).toContain('package:meeting-qwen-web-artifacts');
     expect(workflow).toContain('--no-overwrite');
+    expect(workflow).toContain('--inherit-bucket-acl');
+    expect(workflow).toContain(
+      "OSS_BUCKET: 'meeting-qwen-artifacts-bj-1012659032087746'",
+    );
     expect(workflow).toContain(
       'Artifact prefix is partially populated; refusing to overwrite or complete it.',
     );
