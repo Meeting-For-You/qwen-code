@@ -8970,29 +8970,20 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
             throw standaloneWorkingDirectoryMissingError();
           }
           pendingEntry.startedAt = Date.now();
-          // If this prompt was queued behind another, promote it to
-          // 'running' and publish a started event now that it has reached the
-          // head of the FIFO. A promoted mid-turn message that starts
-          // immediately (the turn settled while the POST was in flight) never
-          // has a queued phase but still needs the started event: the
-          // originator suppresses its own stream echo, and a daemon-owned
-          // mid-turn message has no client-side row to render.
-          if (pendingEntry.state === 'queued' || isPromotedMidTurn) {
-            if (pendingEntry.state === 'queued') {
-              delete entry.todoStopGuardAwaitingQueuedPromptOwnerPromptId;
-              pendingEntry.state = 'running';
-            }
-            entry.events.publish({
-              type: 'pending_prompt_started',
-              promptId: pendingEntry.promptId,
-              data: {
-                sessionId,
-                promptId: pendingEntry.promptId,
-                text: pendingEntry.text,
-              },
-              ...(originatorClientId ? { originatorClientId } : {}),
-            });
+          if (pendingEntry.state === 'queued') {
+            delete entry.todoStopGuardAwaitingQueuedPromptOwnerPromptId;
+            pendingEntry.state = 'running';
           }
+          entry.events.publish({
+            type: 'pending_prompt_started',
+            promptId: pendingEntry.promptId,
+            data: {
+              sessionId,
+              promptId: pendingEntry.promptId,
+              text: pendingEntry.text,
+            },
+            ...(originatorClientId ? { originatorClientId } : {}),
+          });
           const dispatchStartMs = Date.now();
           try {
             return await telemetry.withSpan(

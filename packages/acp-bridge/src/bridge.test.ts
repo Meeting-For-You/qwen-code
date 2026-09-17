@@ -7588,7 +7588,7 @@ describe('createAcpSessionBridge', () => {
         // 'thread' scope: each spawn creates its own session (the default
         // 'single' scope would attach the second spawn to the first).
         sessionScope: 'thread',
-        maxJournalEvents: 2,
+        maxJournalEvents: 3,
         maxJournalBytes: 8 * 1024 * 1024,
         journalGrowthPoolBytes: 8 * 1024 * 1024,
       });
@@ -7756,7 +7756,7 @@ describe('createAcpSessionBridge', () => {
       };
       const bridge = makeBridge({
         channelFactory: factory,
-        maxJournalEvents: 2,
+        maxJournalEvents: 3,
         maxJournalBytes: 8 * 1024 * 1024,
         journalGrowthPoolBytes: 8 * 1024 * 1024,
       });
@@ -7933,7 +7933,7 @@ describe('createAcpSessionBridge', () => {
         channelFactory: async () => handle.channel,
         sessionScope: 'thread',
         channelIdleTimeoutMs: 60_000,
-        maxJournalEvents: 2,
+        maxJournalEvents: 3,
         maxJournalBytes: 8 * 1024 * 1024,
         journalGrowthPoolBytes: 8 * 1024 * 1024,
       });
@@ -8080,7 +8080,7 @@ describe('createAcpSessionBridge', () => {
       registerJournalGrowthSessionLimits,
     } = makeGrowthAggregator();
     const sharedGrowthOpts = {
-      maxJournalEvents: 2,
+      maxJournalEvents: 3,
       maxJournalBytes: 8 * 1024 * 1024,
       journalGrowthPoolBytes: 8 * 1024 * 1024,
       journalGrowthSessionLimits,
@@ -8237,12 +8237,12 @@ describe('createAcpSessionBridge', () => {
       promptImpl: heldPromptImpl,
       sessionIdPrefix: 'sess-b',
     });
-    // A breaches at a two-entry / 8 MiB baseline; B runs a 16 MiB
+    // A breaches at a three-entry / 8 MiB baseline; B runs a 16 MiB
     // baseline and never breaches, so its session stays exactly at its
     // own baseline.
     const bridgeA = makeBridge({
       channelFactory: async () => handleA.channel,
-      maxJournalEvents: 2,
+      maxJournalEvents: 3,
       maxJournalBytes: 8 * 1024 * 1024,
       ...sharedGrowthOpts,
     });
@@ -15808,7 +15808,7 @@ describe('createAcpSessionBridge', () => {
   });
 
   describe('pendingPromptList', () => {
-    it('tracks a single prompt without publishing a pending_prompt_added event', async () => {
+    it('publishes exactly one started event for an immediately running prompt', async () => {
       const events: BridgeEvent[] = [];
       const handle = makeChannel({
         promptImpl: () => ({ stopReason: 'end_turn' }),
@@ -15836,6 +15836,18 @@ describe('createAcpSessionBridge', () => {
       );
       expect(addedEvents).toHaveLength(0);
       await vi.waitFor(() => {
+        const started = events.filter(
+          (e) => e.type === 'pending_prompt_started',
+        );
+        expect(started).toHaveLength(1);
+        expect(started[0]).toMatchObject({
+          promptId: 'prompt-single',
+          data: {
+            sessionId: session.sessionId,
+            promptId: 'prompt-single',
+            text: 'first prompt',
+          },
+        });
         const completed = events.find((e) => e.type === 'turn_complete');
         expect(completed?.promptId).toBe('prompt-single');
         expect(
@@ -15918,7 +15930,7 @@ describe('createAcpSessionBridge', () => {
       await vi.waitFor(() => {
         expect(
           events.filter((e) => e.type === 'pending_prompt_started'),
-        ).toHaveLength(1);
+        ).toHaveLength(2);
         expect(
           events.filter(
             (e) =>
@@ -15931,10 +15943,13 @@ describe('createAcpSessionBridge', () => {
       const startedEvents = events.filter(
         (e) => e.type === 'pending_prompt_started',
       );
-      expect(startedEvents).toHaveLength(1);
-      expect(startedEvents[0]?.promptId).toBe('prompt-second');
+      expect(startedEvents).toHaveLength(2);
+      expect(startedEvents.map((event) => event.promptId)).toEqual([
+        'prompt-first',
+        'prompt-second',
+      ]);
       expect(
-        (startedEvents[0] as BridgeEvent & { data: { text: string } }).data
+        (startedEvents[1] as BridgeEvent & { data: { text: string } }).data
           .text,
       ).toBe('[image]');
       expect(handle.agent.promptCalls[1]?.prompt).toEqual([
@@ -33861,11 +33876,25 @@ describe('createAcpSessionBridge — mid-turn message queue (enqueueMidTurnMessa
     expect(
       events.filter(
         (event) =>
-          (event.type === 'pending_prompt_added' ||
-            event.type === 'pending_prompt_started') &&
+          event.type === 'pending_prompt_added' &&
           event.promptId === 'steer-next',
       ),
     ).toEqual([]);
+    expect(
+      events.filter(
+        (event) =>
+          event.type === 'pending_prompt_started' &&
+          event.promptId === 'steer-next',
+      ),
+    ).toMatchObject([
+      {
+        data: {
+          sessionId: session.sessionId,
+          promptId: 'steer-next',
+          text: 'steer busy',
+        },
+      },
+    ]);
     const steeringUserEvents = events.filter(
       (event) =>
         event.type === 'session_update' &&

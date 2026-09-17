@@ -34,8 +34,9 @@ export const MID_TURN_MESSAGE_INJECTED_EVENT = 'mid_turn_message_injected';
 export const PENDING_PROMPT_ADDED_EVENT = 'pending_prompt_added';
 
 /**
- * Published when a queued prompt begins dispatch (reaches the head of the
- * FIFO). `data: { sessionId, promptId, text }`.
+ * Published when an accepted prompt begins dispatch. This includes prompts
+ * that start immediately and queued prompts that reach the head of the FIFO.
+ * `data: { sessionId, promptId, text }`.
  */
 export const PENDING_PROMPT_STARTED_EVENT = 'pending_prompt_started';
 
