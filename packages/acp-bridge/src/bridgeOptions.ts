@@ -56,6 +56,36 @@ export interface PromptLedgerSink {
   transcriptTailUuid?(sessionId: string): string | undefined;
 }
 
+export interface DurableTurnBranchPoint {
+  readonly assistantRecordUuid: string;
+  readonly checkpointUuid: string;
+}
+
+export interface DurableTurnCommitRequestV1 {
+  readonly v: 1;
+  readonly commitId: string;
+  readonly sessionId: string;
+  readonly promptId: string;
+  readonly completedAt: string;
+  readonly stopReason: string;
+  readonly transcriptTailUuid: string;
+  readonly branchPoint?: DurableTurnBranchPoint;
+}
+
+export interface DurableTurnCommitReceiptV1 {
+  readonly v: 1;
+  readonly commitId: string;
+  readonly sessionId: string;
+  readonly promptId: string;
+  readonly completedAt: string;
+  readonly snapshotHash: string;
+  readonly workspaceRevision: number;
+}
+
+export type DurableTurnCommitHandler = (
+  request: DurableTurnCommitRequestV1,
+) => Promise<void>;
+
 export interface BridgeFreshSessionAdmissionContext {
   readonly operation: 'spawn' | 'load' | 'resume' | 'branch';
   readonly workspaceCwd: string;
@@ -477,6 +507,14 @@ export interface BridgeOptions {
    * persistence, cold loads answer "unknown" for pre-restart prompts).
    */
   promptLedger?: PromptLedgerSink;
+
+  /**
+   * Optional durability barrier for successful, non-cancelled prompts. The
+   * bridge fixes the transcript tail and completed ledger record before it
+   * calls this handler, then withholds `turn_complete`, `sendPrompt`
+   * resolution, and the next FIFO dispatch until the handler resolves.
+   */
+  onDurableTurnCommit?: DurableTurnCommitHandler;
 
   /**
    * Whether ACP text reads are delegated to the client filesystem service.

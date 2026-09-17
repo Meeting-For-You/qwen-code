@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { inspect } from 'node:util';
 import {
@@ -111,6 +111,7 @@ import {
   SessionBusyError,
   InvalidRewindTargetError,
   PromptDeadlineExceededError,
+  DurableTurnCommitError,
   BridgeChannelQuarantinedError,
   StandaloneSessionSpawnError,
 } from './bridgeErrors.js';
@@ -225,6 +226,9 @@ import type {
   BridgeOptions,
   BridgeSessionLifecycleEvent,
   BridgeTelemetry,
+  DurableTurnCommitHandler,
+  DurableTurnCommitRequestV1,
+  DurableTurnBranchPoint,
   LiveScreenContextCaptureHandler,
   LiveSpeakToUserHandler,
   LiveTaskToolRequestHandler,
@@ -1747,25 +1751,7 @@ function broadcastTurnComplete(
   mutateTurnState: boolean,
 ): void {
   try {
-    const meta =
-      promptResult['_meta'] && typeof promptResult['_meta'] === 'object'
-        ? (promptResult['_meta'] as Record<string, unknown>)
-        : undefined;
-    const rawBranchPoint =
-      meta?.['qwen.branchPoint'] && typeof meta['qwen.branchPoint'] === 'object'
-        ? (meta['qwen.branchPoint'] as Record<string, unknown>)
-        : undefined;
-    const branchPoint =
-      promptResult.stopReason === 'end_turn' &&
-      typeof rawBranchPoint?.['assistantRecordUuid'] === 'string' &&
-      CHAT_RECORD_UUID_RE.test(rawBranchPoint['assistantRecordUuid']) &&
-      typeof rawBranchPoint['checkpointUuid'] === 'string' &&
-      CHAT_RECORD_UUID_RE.test(rawBranchPoint['checkpointUuid'])
-        ? {
-            assistantRecordUuid: rawBranchPoint['assistantRecordUuid'],
-            checkpointUuid: rawBranchPoint['checkpointUuid'],
-          }
-        : undefined;
+    const branchPoint = extractDurableTurnBranchPoint(promptResult);
     const published = entry.events.publish({
       type: 'turn_complete',
       ...(promptId ? { promptId } : {}),
@@ -2177,8 +2163,8 @@ function appendPromptLedgerBestEffort(
 function promptLedgerTerminalRecord(
   pendingEntry: PendingPromptEntry,
   terminal: PromptTerminal,
+  at = Date.now(),
 ): PromptLedgerTerminalRecord {
-  const at = Date.now();
   if (terminal.kind === 'complete') {
     if (terminal.result.stopReason === 'cancelled') {
       return {
@@ -2211,6 +2197,115 @@ function promptLedgerTerminalRecord(
   };
 }
 
+function extractDurableTurnBranchPoint(promptResult: {
+  stopReason?: string;
+  [k: string]: unknown;
+}): DurableTurnBranchPoint | undefined {
+  const meta =
+    promptResult['_meta'] && typeof promptResult['_meta'] === 'object'
+      ? (promptResult['_meta'] as Record<string, unknown>)
+      : undefined;
+  const raw =
+    meta?.['qwen.branchPoint'] && typeof meta['qwen.branchPoint'] === 'object'
+      ? (meta['qwen.branchPoint'] as Record<string, unknown>)
+      : undefined;
+  if (
+    promptResult.stopReason !== 'end_turn' ||
+    typeof raw?.['assistantRecordUuid'] !== 'string' ||
+    !CHAT_RECORD_UUID_RE.test(raw['assistantRecordUuid']) ||
+    typeof raw['checkpointUuid'] !== 'string' ||
+    !CHAT_RECORD_UUID_RE.test(raw['checkpointUuid'])
+  ) {
+    return undefined;
+  }
+  return {
+    assistantRecordUuid: raw['assistantRecordUuid'],
+    checkpointUuid: raw['checkpointUuid'],
+  };
+}
+
+function durableTurnCommitId(
+  input: Omit<DurableTurnCommitRequestV1, 'commitId'>,
+): string {
+  return `sha256:${createHash('sha256')
+    .update(JSON.stringify(input))
+    .digest('hex')}`;
+}
+
+async function commitDurableTurn(
+  entry: SessionEntry,
+  pendingEntry: PendingPromptEntry,
+  result: { stopReason?: string; [k: string]: unknown },
+  handler: DurableTurnCommitHandler,
+): Promise<void> {
+  const completedAtMs = Date.now();
+  let transcriptTailUuid: string | undefined;
+  try {
+    transcriptTailUuid = entry.promptLedger?.transcriptTailUuid?.(
+      entry.sessionId,
+    );
+  } catch (error) {
+    throw new DurableTurnCommitError(error);
+  }
+  if (
+    transcriptTailUuid === undefined ||
+    !CHAT_RECORD_UUID_RE.test(transcriptTailUuid)
+  ) {
+    throw new DurableTurnCommitError(
+      new Error('Transcript tail UUID is unavailable after prompt completion'),
+    );
+  }
+  const completedTerminal = promptLedgerTerminalRecord(
+    pendingEntry,
+    { kind: 'complete', result },
+    completedAtMs,
+  );
+  if (!entry.promptLedger) {
+    throw new DurableTurnCommitError(
+      new Error('Prompt ledger is unavailable after prompt completion'),
+    );
+  }
+  try {
+    entry.promptLedger.appendSync(entry.sessionId, completedTerminal);
+  } catch (error) {
+    throw new DurableTurnCommitError(error);
+  }
+  const branchPoint = extractDurableTurnBranchPoint(result);
+  const commitBody: Omit<DurableTurnCommitRequestV1, 'commitId'> = {
+    v: 1,
+    sessionId: entry.sessionId,
+    promptId: pendingEntry.promptId,
+    completedAt: new Date(completedAtMs).toISOString(),
+    stopReason: result.stopReason ?? 'end_turn',
+    transcriptTailUuid,
+    ...(branchPoint !== undefined ? { branchPoint } : {}),
+  };
+  const request: DurableTurnCommitRequestV1 = {
+    v: 1,
+    commitId: durableTurnCommitId(commitBody),
+    sessionId: commitBody.sessionId,
+    promptId: commitBody.promptId,
+    completedAt: commitBody.completedAt,
+    stopReason: commitBody.stopReason,
+    transcriptTailUuid: commitBody.transcriptTailUuid,
+    ...(commitBody.branchPoint !== undefined
+      ? { branchPoint: commitBody.branchPoint }
+      : {}),
+  };
+  try {
+    await handler(request);
+    if (pendingEntry.terminalPublished) {
+      throw new DurableTurnCommitError(
+        new Error('Prompt terminated while its durable commit was pending'),
+      );
+    }
+  } catch (error) {
+    throw error instanceof DurableTurnCommitError
+      ? error
+      : new DurableTurnCommitError(error);
+  }
+}
+
 /**
  * Publish the formal terminal event for an accepted prompt exactly once.
  * All terminal paths (agent settle, queued removal, deadline, session
@@ -2224,6 +2319,7 @@ function publishPromptTerminal(
   entry: SessionEntry,
   pendingEntry: PendingPromptEntry,
   terminal: PromptTerminal,
+  options?: { ledgerAlreadyWritten?: boolean },
 ): void {
   if (pendingEntry.terminalPublished) {
     // Dedup here is the designed steady state, not an anomaly: deadline
@@ -2236,18 +2332,19 @@ function publishPromptTerminal(
     return;
   }
   pendingEntry.terminalPublished = true;
-  appendPromptLedgerBestEffort(
-    entry,
-    promptLedgerTerminalRecord(pendingEntry, terminal),
-  );
+  if (options?.ledgerAlreadyWritten !== true) {
+    appendPromptLedgerBestEffort(
+      entry,
+      promptLedgerTerminalRecord(pendingEntry, terminal),
+    );
+  }
   rememberTerminalTurnStatus(entry, pendingEntry, terminal);
   const originatorClientId = pendingEntry.originatorClientId;
   // Only a running prompt's terminal belongs to the active turn. The
-  // `state === 'running'` gate (not `activePromptId`) is deliberate: on
-  // the normal settle path `settleActivePromptState` runs in
-  // `promptPromise.finally` BEFORE the terminal is published, so
-  // `activePromptId` is already cleared when a genuine active terminal
-  // lands here. Queued terminals publish their event alone and must
+  // `state === 'running'` gate (not `activePromptId`) is deliberate: the
+  // normal settle path clears active state before publishing its terminal,
+  // while the pending entry retains its execution identity. Queued terminals
+  // publish their event alone and must
   // neither set nor clear session-scoped turn state.
   const mutateTurnState = pendingEntry.state === 'running';
   if (mutateTurnState) {
@@ -9180,16 +9277,7 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
                   throw echoErr;
                 }
                 pendingEntry.dispatched = true;
-                const promptPromise = entry.connection
-                  .prompt(promptRequest)
-                  .finally(() => {
-                    // Ownership-gated: a late settle after a deadline
-                    // already released the FIFO must not clear the NEXT
-                    // prompt's active state. The deferred
-                    // close-on-prompt-complete lives in `result.finally`
-                    // (after the terminal broadcast), not here.
-                    settleActivePromptState(entry, pendingEntry.promptId);
-                  });
+                const promptPromise = entry.connection.prompt(promptRequest);
 
                 // Race against channel termination: if the underlying transport
                 // dies (child crashed, stream torn down) WHILE the prompt is in
@@ -9313,19 +9401,47 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
           }
         }),
       );
-      // Do not reorder — this `result.then` must stay registered before the
-      // `result.finally` below: handlers on the same promise run in
-      // registration order and the broadcasts are synchronous, which is what
-      // guarantees the terminal frame precedes the deferred
-      // close-on-prompt-complete in `result.finally`.
-      result.then(
-        (promptResult) => {
-          publishPromptTerminal(entry, pendingEntry, {
-            kind: 'complete',
-            result: promptResult,
-          });
+      const committedResult = result.then(
+        async (promptResult) => {
+          if (deadlineTimer !== undefined) {
+            clearTimeout(deadlineTimer);
+            deadlineTimer = undefined;
+          }
+          const durableTurnCommit = opts.onDurableTurnCommit;
+          const requiresDurableCommit =
+            durableTurnCommit !== undefined &&
+            promptResult.stopReason !== 'cancelled';
+          if (durableTurnCommit && requiresDurableCommit) {
+            try {
+              await commitDurableTurn(
+                entry,
+                pendingEntry,
+                promptResult,
+                durableTurnCommit,
+              );
+            } catch (error) {
+              settleActivePromptState(entry, pendingEntry.promptId);
+              publishPromptTerminal(entry, pendingEntry, {
+                kind: 'error',
+                err: error,
+              });
+              throw error;
+            }
+          }
+          settleActivePromptState(entry, pendingEntry.promptId);
+          publishPromptTerminal(
+            entry,
+            pendingEntry,
+            {
+              kind: 'complete',
+              result: promptResult,
+            },
+            requiresDurableCommit ? { ledgerAlreadyWritten: true } : undefined,
+          );
+          return promptResult;
         },
         (err) => {
+          settleActivePromptState(entry, pendingEntry.promptId);
           if (err instanceof DOMException && err.name === 'AbortError') {
             // An aborted prompt (queued removal, caller socket close,
             // deadline…) still owes its formal terminal — fall back to a
@@ -9333,9 +9449,10 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
             // (removePendingPrompt, onDeadline, flush) are deduped by the
             // per-prompt latch inside `publishPromptTerminal`.
             publishPromptTerminal(entry, pendingEntry, { kind: 'cancelled' });
-            return;
+            throw err;
           }
           publishPromptTerminal(entry, pendingEntry, { kind: 'error', err });
+          throw err;
         },
       );
       // Tail swallows failures so subsequent prompts still run. The caller
@@ -9348,11 +9465,11 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
           // failures. The queue only needs to fence any in-flight write.
         }
       };
-      entry.promptQueue = result.then(
+      entry.promptQueue = committedResult.then(
         drainCancelForwarding,
         drainCancelForwarding,
       );
-      result
+      committedResult
         .finally(() => {
           if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
           // Remove this prompt from the pending list and publish a
@@ -9397,10 +9514,9 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
           // promotions follow it without exposing the fallback as queued.
           releasePromptSlot();
           settleUndrainedMidTurnMessages(entry, undrainedMessages);
-          // DAEMON-005: deferred close-on-prompt-complete. Lives here (not
-          // in `promptPromise.finally`) so the terminal broadcast — the
-          // `result.then` registered above on this same promise — runs
-          // before the bus closes. Conditions: nobody attached or
+          // DAEMON-005: deferred close-on-prompt-complete. The durable result
+          // settles only after the terminal broadcast, so the bus remains open
+          // through the external commit barrier. Conditions: nobody attached or
           // subscribed, no other prompt pending (a queued successor keeps
           // the session draining and triggers its own close), and this
           // exact entry is still registered — after killSession's eager
@@ -9409,7 +9525,7 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
           void maybeCloseIdleSession(entry, 'prompt_settled');
         })
         .catch(() => {});
-      return result;
+      return committedResult;
     },
 
     async cancelSession(sessionId, req, context) {

@@ -81,6 +81,10 @@ import { createBridgeFileSystemAdapter } from './bridge-file-system-adapter.js';
 import { PathMutexRegistry } from './fs/path-mutex-registry.js';
 import { isDeepHealthQuery } from './health-query.js';
 import { isLoopbackBind } from './loopback-binds.js';
+import {
+  createDurableTurnCommitHandler,
+  QWEN_DURABLE_TURN_COMMIT_URL_ENV,
+} from './durable-turn-commit.js';
 import { RUNTIME_STARTUP_CANCELLED_MESSAGE } from './runtime-startup-errors.js';
 import { resolveWebShellDir } from './web-shell-resolver.js';
 import { resolveServeToken } from './serve-token.js';
@@ -3187,6 +3191,9 @@ async function runQwenServeImpl(
     );
   const clientMcpOverWsEnv = process.env[QWEN_SERVE_CLIENT_MCP_OVER_WS_ENV];
   const cdpTunnelOverWsEnv = process.env[QWEN_SERVE_CDP_TUNNEL_OVER_WS_ENV];
+  const onDurableTurnCommit = createDurableTurnCommitHandler(
+    process.env[QWEN_DURABLE_TURN_COMMIT_URL_ENV],
+  );
   const chromeExtensionOriginAllowed = hasChromeExtensionOrigin(
     optsIn.allowOrigins,
   );
@@ -5339,6 +5346,7 @@ async function runQwenServeImpl(
           boundWorkspace,
           primarySessionRuntimeBaseDir,
         ),
+        ...(onDurableTurnCommit ? { onDurableTurnCommit } : {}),
         sessionShellCommandEnabled,
         childEnvOverrides,
         channelFactory,
@@ -5789,6 +5797,7 @@ async function runQwenServeImpl(
           workspaceInput.cwd,
           secondaryEnv.sessionRuntimeBaseDir,
         ),
+        ...(onDurableTurnCommit ? { onDurableTurnCommit } : {}),
         sessionShellCommandEnabled,
         childEnvOverrides,
         channelFactory: secondaryChannelFactory,
@@ -6375,6 +6384,7 @@ async function runQwenServeImpl(
                   cwd,
                   wsEnv.sessionRuntimeBaseDir,
                 ),
+                ...(onDurableTurnCommit ? { onDurableTurnCommit } : {}),
               }),
           sessionShellCommandEnabled,
           childEnvOverrides,

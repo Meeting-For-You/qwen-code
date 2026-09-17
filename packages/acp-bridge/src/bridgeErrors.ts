@@ -286,6 +286,15 @@ export class PromptDeadlineExceededError extends Error {
   }
 }
 
+export class DurableTurnCommitError extends Error {
+  readonly code = 'durable_turn_commit_failed';
+
+  constructor(cause: unknown) {
+    super('Durable turn commit failed', { cause });
+    this.name = 'DurableTurnCommitError';
+  }
+}
+
 /**
  * Thrown by `spawnOrAttach` when the requested `workspaceCwd` doesn't
  * canonicalize to the bridge's bound workspace. Every bridge instance is bound

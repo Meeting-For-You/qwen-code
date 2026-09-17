@@ -4,9 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeBridge, makeChannel, WS_A } from './internal/testUtils.js';
-import type { PromptLedgerSink } from './bridgeOptions.js';
+import type {
+  DurableTurnCommitRequestV1,
+  PromptLedgerSink,
+} from './bridgeOptions.js';
+import type { BridgeEvent } from './eventBus.js';
 import type { PromptLedgerRecord } from './prompt-ledger.js';
 
 function recordingLedger(): {
@@ -302,6 +306,240 @@ describe('bridge prompt terminal ledger writes', () => {
       // guarantee is that omitting the sink is valid, exercised by every
       // other bridge test that never configures one.
       expect(bridge.sessionCount).toBe(1);
+    } finally {
+      await bridge.shutdown();
+    }
+  });
+});
+
+describe('durable turn completion barrier', () => {
+  it('withholds success and the next prompt until durable commit succeeds', async () => {
+    let releaseCommit: (() => void) | undefined;
+    const commitGate = new Promise<void>((resolve) => {
+      releaseCommit = resolve;
+    });
+    const requests: DurableTurnCommitRequestV1[] = [];
+    const events: BridgeEvent[] = [];
+    const branchPoint = {
+      assistantRecordUuid: '22222222-2222-4222-8222-222222222222',
+      checkpointUuid: '33333333-3333-4333-8333-333333333333',
+    };
+    const handle = makeChannel({
+      promptImpl: () => ({
+        stopReason: 'end_turn',
+        _meta: { 'qwen.branchPoint': branchPoint },
+      }),
+    });
+    const ledger = recordingLedger();
+    ledger.sink.transcriptTailUuid = () =>
+      '11111111-1111-4111-8111-111111111111';
+    const bridge = makeBridge({
+      channelFactory: async () => handle.channel,
+      promptLedger: ledger.sink,
+      onDurableTurnCommit: async (request) => {
+        requests.push(request);
+        await commitGate;
+      },
+    });
+    try {
+      const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
+      const subscription = (async () => {
+        for await (const event of bridge.subscribeEvents(session.sessionId)) {
+          events.push(event);
+        }
+      })();
+      void subscription.catch(() => undefined);
+      let firstResolved = false;
+      const first = bridge
+        .sendPrompt(
+          session.sessionId,
+          {
+            sessionId: session.sessionId,
+            prompt: [{ type: 'text', text: 'first' }],
+          },
+          undefined,
+          { promptId: 'prompt-first' },
+        )
+        .then((result) => {
+          firstResolved = true;
+          return result;
+        });
+      const second = bridge.sendPrompt(
+        session.sessionId,
+        {
+          sessionId: session.sessionId,
+          prompt: [{ type: 'text', text: 'second' }],
+        },
+        undefined,
+        { promptId: 'prompt-second' },
+      );
+
+      await vi.waitFor(() => expect(requests).toHaveLength(1));
+      expect(handle.agent.promptCalls).toHaveLength(1);
+      expect(firstResolved).toBe(false);
+      expect(bridge.getSessionSummary(session.sessionId).hasActivePrompt).toBe(
+        true,
+      );
+      expect(events.some((event) => event.type === 'turn_complete')).toBe(
+        false,
+      );
+      expect(terminalRecords(ledger.records)).toEqual([
+        expect.objectContaining({
+          promptId: 'prompt-first',
+          terminal: 'completed',
+        }),
+      ]);
+
+      releaseCommit!();
+      await first;
+      await vi.waitFor(() => expect(handle.agent.promptCalls).toHaveLength(2));
+      await second;
+      await vi.waitFor(() =>
+        expect(
+          events.filter((event) => event.type === 'turn_complete'),
+        ).toHaveLength(2),
+      );
+      expect(bridge.getSessionSummary(session.sessionId).hasActivePrompt).toBe(
+        false,
+      );
+      expect(requests[0]).toMatchObject({
+        v: 1,
+        commitId: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        sessionId: session.sessionId,
+        promptId: 'prompt-first',
+        stopReason: 'end_turn',
+        transcriptTailUuid: '11111111-1111-4111-8111-111111111111',
+        branchPoint,
+      });
+      expect(requests[0]?.completedAt).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+      );
+      expect(requests).toHaveLength(2);
+      expect(requests[1]?.commitId).not.toBe(requests[0]?.commitId);
+    } finally {
+      releaseCommit?.();
+      await bridge.shutdown();
+    }
+  });
+
+  it('publishes only turn_error when durable commit fails', async () => {
+    const events: BridgeEvent[] = [];
+    const handle = makeChannel();
+    const ledger = recordingLedger();
+    ledger.sink.transcriptTailUuid = () =>
+      '11111111-1111-4111-8111-111111111111';
+    const bridge = makeBridge({
+      channelFactory: async () => handle.channel,
+      promptLedger: ledger.sink,
+      onDurableTurnCommit: async () => {
+        throw new Error('snapshot unavailable');
+      },
+    });
+    try {
+      const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
+      const subscription = (async () => {
+        for await (const event of bridge.subscribeEvents(session.sessionId)) {
+          events.push(event);
+        }
+      })();
+      void subscription.catch(() => undefined);
+
+      await expect(
+        bridge.sendPrompt(
+          session.sessionId,
+          {
+            sessionId: session.sessionId,
+            prompt: [{ type: 'text', text: 'commit me' }],
+          },
+          undefined,
+          { promptId: 'prompt-failed-commit' },
+        ),
+      ).rejects.toMatchObject({ code: 'durable_turn_commit_failed' });
+      await vi.waitFor(() =>
+        expect(events.some((event) => event.type === 'turn_error')).toBe(true),
+      );
+      expect(events.some((event) => event.type === 'turn_complete')).toBe(
+        false,
+      );
+      expect(events.find((event) => event.type === 'turn_error')).toMatchObject(
+        {
+          promptId: 'prompt-failed-commit',
+          data: { code: 'durable_turn_commit_failed' },
+        },
+      );
+      expect(terminalRecords(ledger.records).at(-1)).toMatchObject({
+        promptId: 'prompt-failed-commit',
+        terminal: 'error',
+        code: 'durable_turn_commit_failed',
+      });
+    } finally {
+      await bridge.shutdown();
+    }
+  });
+
+  it('fails closed when transcript boundary evidence is unavailable', async () => {
+    const onDurableTurnCommit = vi.fn(async () => undefined);
+    const handle = makeChannel();
+    const ledger = recordingLedger();
+    const bridge = makeBridge({
+      channelFactory: async () => handle.channel,
+      promptLedger: ledger.sink,
+      onDurableTurnCommit,
+    });
+    try {
+      const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
+      await expect(
+        bridge.sendPrompt(session.sessionId, {
+          sessionId: session.sessionId,
+          prompt: [{ type: 'text', text: 'missing transcript tail' }],
+        }),
+      ).rejects.toMatchObject({ code: 'durable_turn_commit_failed' });
+      expect(onDurableTurnCommit).not.toHaveBeenCalled();
+      expect(terminalRecords(ledger.records).at(-1)).toMatchObject({
+        terminal: 'error',
+        code: 'durable_turn_commit_failed',
+      });
+    } finally {
+      await bridge.shutdown();
+    }
+  });
+
+  it.each([
+    {
+      name: 'cancelled completion',
+      promptImpl: () => ({ stopReason: 'cancelled' as const }),
+      rejects: false,
+    },
+    {
+      name: 'ACP error',
+      promptImpl: () => {
+        throw new Error('provider failed');
+      },
+      rejects: true,
+    },
+  ])('does not commit a $name', async ({ promptImpl, rejects }) => {
+    const onDurableTurnCommit = vi.fn(async () => undefined);
+    const handle = makeChannel({ promptImpl });
+    const ledger = recordingLedger();
+    ledger.sink.transcriptTailUuid = () =>
+      '11111111-1111-4111-8111-111111111111';
+    const bridge = makeBridge({
+      channelFactory: async () => handle.channel,
+      promptLedger: ledger.sink,
+      onDurableTurnCommit,
+    });
+    try {
+      const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
+      const prompt = bridge.sendPrompt(session.sessionId, {
+        sessionId: session.sessionId,
+        prompt: [{ type: 'text', text: 'do not commit' }],
+      });
+      if (rejects) await expect(prompt).rejects.toThrow();
+      else
+        await expect(prompt).resolves.toMatchObject({
+          stopReason: 'cancelled',
+        });
+      expect(onDurableTurnCommit).not.toHaveBeenCalled();
     } finally {
       await bridge.shutdown();
     }
