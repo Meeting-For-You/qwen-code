@@ -6,7 +6,7 @@ import type { PromptFile, PromptImage } from '../adapters/promptTypes';
 import { type UseDaemonFollowupSuggestionReturn } from '@qwen-code/webui/daemon-react-sdk';
 import { type SkillInfo, type SlashCommandCompletionResult } from '../completions/slashCompletion';
 import { type CommandDisplayCategoryOrder } from '../utils/commandDisplay';
-import { type AtMentionMenuState } from './useAtMentionMenu';
+import { type AtMentionMenuState, type AtMentionWorkspaceActions } from './useAtMentionMenu';
 import type { DaemonInputAnnotation } from '@qwen-code/sdk/daemon';
 import type { ComposerTagClickHandler, ComposerTagRenderer, UserMessageContentParser, WebShellComposerApi, WebShellComposerInput, WebShellComposerTag, WebShellComposerTagIconMap, WebShellComposerTagOptions, WebShellComposerTextOptions, WebShellBuiltinAtProvidersConfig, WebShellAtProvider } from '../customization';
 export declare function serializeComposerTag(tag: WebShellComposerTag): string;
@@ -158,6 +158,7 @@ export interface ComposerImageTransferHandlers {
 export interface UseComposerCoreReturn {
     containerRef: React.RefObject<HTMLDivElement | null>;
     viewRef: React.RefObject<EditorView | null>;
+    workspaceActionsRef: React.RefObject<AtMentionWorkspaceActions | undefined>;
     mobileComposer: MobileComposerBackend | null;
     focus: () => void;
     submitText: () => void;

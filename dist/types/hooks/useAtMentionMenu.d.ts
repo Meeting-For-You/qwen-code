@@ -1,7 +1,10 @@
 import type { RefObject, ReactNode } from 'react';
 import type { StateEffect } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
-import type { WebShellAtItem, WebShellAtProvider, WebShellAtProviderTab, WebShellBuiltinAtProvidersConfig, WebShellComposerTag } from '../customization';
+import type { WebShellAtProvider, WebShellAtProviderTab, WebShellBuiltinAtProvidersConfig, WebShellComposerTag } from '../customization';
+import type { AtMentionItem, AtMentionWorkspaceActions } from './useAtMentionSources';
+export { FILE_PROVIDER_ID, MCP_RESOURCES_PROVIDER_ID, fileReferenceInsertText, sanitizeDisplayText, } from './useAtMentionSources';
+export type { AtMentionItem, AtMentionWorkspaceActions, } from './useAtMentionSources';
 export interface AtMentionProviderView {
     id: string;
     provider: WebShellAtProvider;
@@ -11,12 +14,6 @@ export interface AtMentionProviderView {
     tabs?: readonly WebShellAtProviderTab[];
     selectedTabId?: string;
     renderItem?: WebShellAtProvider['renderItem'];
-}
-export interface AtMentionItem extends WebShellAtItem {
-    kind?: 'insert' | 'directory' | 'mcp-server' | 'upload';
-    fileKind?: DirectoryEntry['kind'];
-    targetPath?: string;
-    serverName?: string;
 }
 export interface AtMentionMenuState {
     from: number;
@@ -35,64 +32,6 @@ export interface AtMentionMenuState {
     validateMcpServer?: boolean;
     tabs?: readonly WebShellAtProviderTab[];
     selectedTabId?: string;
-}
-type GlobWorkspaceFn = (pattern: string, opts?: {
-    maxResults?: number;
-    signal?: AbortSignal;
-}) => Promise<{
-    matches: string[];
-}>;
-interface ExtensionEntry {
-    name: string;
-    displayName?: string;
-    description?: string;
-    isActive: boolean;
-}
-type LoadExtensionsStatusFn = () => Promise<{
-    extensions: ExtensionEntry[];
-}>;
-interface DirectoryEntry {
-    name: string;
-    kind: 'file' | 'directory' | 'symlink' | 'other';
-    ignored: boolean;
-}
-type ListDirectoryFn = (dirPath: string, options?: {
-    signal?: AbortSignal;
-}) => Promise<{
-    kind: 'list';
-    path: string;
-    entries: DirectoryEntry[];
-    truncated: boolean;
-}>;
-interface McpServerEntry {
-    kind: 'mcp_server';
-    name: string;
-    disabled: boolean;
-    mcpStatus?: string;
-    resourceCount?: number;
-    description?: string;
-}
-type LoadMcpStatusFn = () => Promise<{
-    servers: McpServerEntry[];
-}>;
-type LoadMcpResourcesFn = (serverName: string, options?: {
-    signal?: AbortSignal;
-}) => Promise<{
-    resources: Array<{
-        uri: string;
-        name?: string;
-        title?: string;
-        description?: string;
-        mimeType?: string;
-        size?: number;
-    }>;
-}>;
-export interface AtMentionWorkspaceActions {
-    globWorkspace?: GlobWorkspaceFn;
-    loadExtensionsStatus?: LoadExtensionsStatusFn;
-    listDirectory?: ListDirectoryFn;
-    loadMcpStatus?: LoadMcpStatusFn;
-    loadMcpResources?: LoadMcpResourcesFn;
 }
 export interface UseAtMentionMenuOptions {
     viewRef: RefObject<EditorView | null>;
@@ -116,15 +55,6 @@ export interface UseAtMentionMenuOptions {
      */
     onUploadRequest?: (targetDir: string, restoreQuery?: () => void) => void;
 }
-export declare const FILE_PROVIDER_ID = "files";
-export declare const MCP_RESOURCES_PROVIDER_ID = "mcp-resources";
-export declare function sanitizeDisplayText(raw: string): string | undefined;
-/**
- * Build the composer insert text for a workspace file reference, e.g.
- * `@path/to/file `. Shared by the @ file provider and the file-upload flow so
- * both escape identically (filenames with spaces / non-ASCII / `%` are common).
- */
-export declare function fileReferenceInsertText(filePath: string): string;
 export declare function useAtMentionMenu({ viewRef, disabledRef, shellModeRef, workspaceActionsRef, workspaceKey, builtinProviders, providers, createInlineTagEffect, onUploadRequest, }: UseAtMentionMenuOptions): {
     state: AtMentionMenuState | null;
     close: (options?: {
@@ -140,4 +70,3 @@ export declare function useAtMentionMenu({ viewRef, disabledRef, shellModeRef, w
     backToCategories: () => false | "items" | "categories";
     updateSearch: (query: string) => boolean;
 };
-export {};

@@ -9,7 +9,7 @@ import { type WebShellComposerInput, type WebShellComposerTagIconMap, type WebSh
 import { type ComposerSubmitMetadata, type EditorHandle } from '../hooks/useComposerCore';
 import type { VoiceStatusRevision, VoiceWorkspaceTarget } from '../voice/voice-workspace-target';
 import { type SessionGitIntent } from './GitModePopover';
-export type ComposerToolbarAction = 'approvalMode' | 'contextUsage' | 'gitBranch' | 'model' | 'commands' | 'files' | 'widthMode' | 'voice' | 'workspace';
+export type ComposerToolbarAction = 'approvalMode' | 'contextUsage' | 'gitBranch' | 'model' | 'commands' | 'files' | 'widthMode' | 'voice' | 'workspace' | 'addMenu';
 interface ChatEditorProps {
     onSubmit: (text: string, images?: import('../adapters/promptTypes').PromptImage[], files?: import('../adapters/promptTypes').PromptFile[], commitAccepted?: import('../hooks/useComposerCore').ComposerSubmitCommit, metadata?: ComposerSubmitMetadata) => boolean | void;
     onInputTextChange?: (text: string) => void;

@@ -23,8 +23,8 @@ export declare function useSessionCatalogQuery(client: DaemonClient, query: Sess
     truncated: boolean;
     reload: (options?: {
         interactive?: boolean;
-    }) => Promise<undefined> | Promise<import("@qwen-code/sdk/daemon").DaemonSessionListPage>;
-    page?: import("@qwen-code/sdk/daemon").DaemonSessionListPage;
+    }) => Promise<undefined> | Promise<import("@qwen-code/sdk").DaemonSessionListPage>;
+    page?: import("@qwen-code/sdk").DaemonSessionListPage;
     loading: boolean;
     stale: boolean;
     error?: Error;

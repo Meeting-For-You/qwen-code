@@ -11,13 +11,13 @@ interface ScopedSessionsOptions {
     pollIntervalMs?: number;
 }
 export declare function useScopedSessions(workspaceCwd: string | undefined, options?: ScopedSessionsOptions): {
-    data: import("@qwen-code/sdk/daemon").DaemonSessionSummary[] | undefined;
-    sessions: import("@qwen-code/sdk/daemon").DaemonSessionSummary[];
+    data: import("@qwen-code/sdk").DaemonSessionSummary[] | undefined;
+    sessions: import("@qwen-code/sdk").DaemonSessionSummary[];
     loading: boolean;
     error: Error | undefined;
     reload: (reloadOptions?: {
         interactive?: boolean;
-    }) => Promise<import("@qwen-code/sdk/daemon").DaemonSessionSummary[] | undefined>;
+    }) => Promise<import("@qwen-code/sdk").DaemonSessionSummary[] | undefined>;
     nextCursor: string | undefined;
     liveMergeFailed: boolean;
     truncated: boolean;
@@ -44,11 +44,11 @@ export declare function useScopedSessions(workspaceCwd: string | undefined, opti
     unarchiveSession: (sessionId: string) => Promise<boolean>;
     catalogQuery: SessionCatalogQuery | undefined;
 } | {
-    data: import("@qwen-code/sdk/daemon").DaemonSessionSummary[] | undefined;
-    sessions: import("@qwen-code/sdk/daemon").DaemonSessionSummary[];
+    data: import("@qwen-code/sdk").DaemonSessionSummary[] | undefined;
+    sessions: import("@qwen-code/sdk").DaemonSessionSummary[];
     loading: boolean;
     error: Error | undefined;
-    reload: () => Promise<import("@qwen-code/sdk/daemon").DaemonSessionSummary[]>;
+    reload: () => Promise<import("@qwen-code/sdk").DaemonSessionSummary[]>;
     deleteSession: (sessionId: string) => Promise<boolean>;
     deleteSessions: (sessionIds: string[]) => Promise<{
         removed: string[];
