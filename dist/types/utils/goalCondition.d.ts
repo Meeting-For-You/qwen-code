@@ -1,0 +1,43 @@
+/**
+ * @license
+ * Copyright 2026 Qwen Team
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * Words the daemon reads as "drop the goal" rather than as a condition.
+ *
+ * Mirrors CLEAR_KEYWORDS in packages/cli/src/ui/commands/goalCommand.ts, which
+ * is the authority. The test beside this file reads that source and fails on
+ * drift — this client bundles for the browser and cannot import from core.
+ */
+export declare const GOAL_CLEAR_KEYWORDS: ReadonlySet<string>;
+export type ParsedWebShellGoalCommand = {
+    kind: 'status';
+} | {
+    kind: 'set' | 'edit';
+    objective: string;
+} | {
+    kind: 'pause' | 'resume' | 'clear';
+} | {
+    kind: 'error';
+    keyword: 'set' | 'edit';
+};
+/** The argument of a `/goal …` command; `''` for a bare `/goal`. */
+export declare function goalArgOf(text: string): string;
+/** Browser-side mirror of the CLI's Goal v3 command grammar. */
+export declare function parseWebShellGoalCommand(text: string): ParsedWebShellGoalCommand;
+/**
+ * True when `text` is a `/goal <clear-keyword>` invocation.
+ *
+ * The prefix is checked here rather than assumed. `goalArgOf` strips `/goal`
+ * only when it is present and otherwise returns the text unchanged, so without
+ * this guard a bare `"clear"` — a perfectly ordinary thing to type into a chat
+ * box — would answer true to "is this a goal-clear command?".
+ */
+export declare function isGoalClearCommand(text: string): boolean;
+/**
+ * True when a would-be goal condition is really a clear keyword. `/goal clear`
+ * clears rather than sets, so a form that accepts "clear" as a condition would
+ * silently start a session that immediately drops the goal.
+ */
+export declare function isGoalClearKeyword(condition: string): boolean;
