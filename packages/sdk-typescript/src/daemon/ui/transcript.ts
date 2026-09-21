@@ -181,6 +181,49 @@ export function appendLocalUserTranscriptMessage(
   return trimTranscriptState(next);
 }
 
+/**
+ * Bind a daemon `promptId` to the local optimistic user block that already
+ * displays this prompt, instead of rendering it a second time.
+ *
+ * The daemon publishes `pending_prompt_started` for every prompt, including
+ * ones that start immediately, and the originating client suppresses its own
+ * `user_message_chunk` echo. A client that appended the prompt optimistically
+ * therefore already shows it when the started event arrives. Only the most
+ * recent user block is a candidate, and only while it is still purely local
+ * (no daemon record or prompt id) with identical text.
+ *
+ * Returns the next state, or `undefined` when there is nothing to claim and
+ * the caller must render the prompt itself.
+ */
+export function claimLocalUserTranscriptMessage(
+  state: DaemonTranscriptState,
+  text: string,
+  promptId: string,
+  opts: DaemonTranscriptReducerOptions = {},
+): DaemonTranscriptState | undefined {
+  let candidate: DaemonTranscriptBlock | undefined;
+  for (let index = state.blocks.length - 1; index >= 0; index--) {
+    const block = state.blocks[index];
+    if (block?.kind === 'user') {
+      candidate = block;
+      break;
+    }
+  }
+  if (
+    candidate?.kind !== 'user' ||
+    candidate.text !== text ||
+    candidate.promptId !== undefined ||
+    candidate.sourceRecordIds !== undefined
+  ) {
+    return undefined;
+  }
+  const next = cloneTranscriptState(state, opts);
+  const block = getWritableBlockById(next, candidate.id);
+  if (block?.kind !== 'user') return undefined;
+  block.promptId = promptId;
+  return next;
+}
+
 // Freeze retained COW collections at the dispatch boundary to catch consumers
 // that mutate a shared snapshot (see reduceDaemonTranscriptEvents). This is a
 // dev/CI safety net; the reducer's own ownership discipline does not depend on

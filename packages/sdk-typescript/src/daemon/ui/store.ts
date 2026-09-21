@@ -15,6 +15,7 @@ import type {
 } from './types.js';
 import {
   appendLocalUserTranscriptMessage,
+  claimLocalUserTranscriptMessage,
   createDaemonTranscriptState,
   estimateDaemonTranscriptBlockBytes,
   rebuildDaemonTranscriptBlockIndex,
@@ -105,6 +106,19 @@ export function createDaemonTranscriptStore(
       });
       blockChangeSummary = invalidateTailAppend(blockChangeSummary);
       scheduleNotify();
+    },
+    claimLocalUserMessage(text: string, promptId: string) {
+      const claimed = claimLocalUserTranscriptMessage(
+        state,
+        text,
+        promptId,
+        reducerOptions,
+      );
+      if (!claimed) return false;
+      state = claimed;
+      blockChangeSummary = invalidateTailAppend(blockChangeSummary);
+      scheduleNotify();
+      return true;
     },
     reset(nextSeed: Partial<DaemonTranscriptState> = {}) {
       state = createState({

@@ -1219,6 +1219,12 @@ export interface DaemonTranscriptStore {
       attachmentId?: string;
     }>,
   ): void;
+  /**
+   * Bind `promptId` to the local optimistic user message that already shows
+   * this prompt (same text, no daemon record yet). Returns `false` when there
+   * is no such message and the caller must render the prompt itself.
+   */
+  claimLocalUserMessage(text: string, promptId: string): boolean;
   reset(seed?: Partial<DaemonTranscriptState>): void;
   /**
    * Clear the `awaitingResync` latch that gets set when the daemon emits

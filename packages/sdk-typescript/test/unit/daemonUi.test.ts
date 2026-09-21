@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   appendLocalUserTranscriptMessage,
+  claimLocalUserTranscriptMessage,
   createDaemonToolPreview,
   createDaemonTranscriptState,
   createDaemonTranscriptStore,
@@ -63,6 +64,100 @@ describe('daemon UI normalizer and transcript reducer', () => {
       { kind: 'user', text: 'hello' },
       { kind: 'assistant', text: 'hi there', streaming: true },
     ]);
+  });
+
+  describe('claiming a local optimistic user message', () => {
+    it('binds the prompt id to the optimistic block without adding a block', () => {
+      const local = appendLocalUserTranscriptMessage(
+        createDaemonTranscriptState({ now: 1 }),
+        'hello',
+        { now: 2 },
+      );
+
+      const claimed = claimLocalUserTranscriptMessage(
+        local,
+        'hello',
+        'prompt-1',
+        { now: 3 },
+      );
+
+      expect(claimed?.blocks).toHaveLength(1);
+      expect(claimed?.blocks[0]).toMatchObject({
+        kind: 'user',
+        text: 'hello',
+        promptId: 'prompt-1',
+      });
+      // Copy-on-write: the previous snapshot is left untouched.
+      expect(local.blocks[0]).not.toHaveProperty('promptId', 'prompt-1');
+    });
+
+    it('does not claim when the text differs', () => {
+      const local = appendLocalUserTranscriptMessage(
+        createDaemonTranscriptState({ now: 1 }),
+        'hello',
+        { now: 2 },
+      );
+      expect(
+        claimLocalUserTranscriptMessage(local, 'other', 'prompt-1'),
+      ).toBeUndefined();
+    });
+
+    it('does not claim a block that already carries a prompt id or daemon record', () => {
+      const local = appendLocalUserTranscriptMessage(
+        createDaemonTranscriptState({ now: 1 }),
+        'hello',
+        { now: 2 },
+      );
+      const claimed = claimLocalUserTranscriptMessage(
+        local,
+        'hello',
+        'prompt-1',
+      );
+      expect(
+        claimLocalUserTranscriptMessage(claimed!, 'hello', 'prompt-2'),
+      ).toBeUndefined();
+
+      const fromDaemon = reduceDaemonTranscriptEvents(
+        createDaemonTranscriptState({ now: 1 }),
+        [
+          {
+            type: 'user.text.delta',
+            text: 'hello',
+            sourceRecordIds: ['record-1'],
+          },
+        ],
+        { now: 2 },
+      );
+      expect(
+        claimLocalUserTranscriptMessage(fromDaemon, 'hello', 'prompt-1'),
+      ).toBeUndefined();
+    });
+
+    it('only considers the most recent user block', () => {
+      let state = appendLocalUserTranscriptMessage(
+        createDaemonTranscriptState({ now: 1 }),
+        'first',
+        { now: 2 },
+      );
+      state = appendLocalUserTranscriptMessage(state, 'second', { now: 3 });
+      expect(
+        claimLocalUserTranscriptMessage(state, 'first', 'prompt-1'),
+      ).toBeUndefined();
+      expect(
+        claimLocalUserTranscriptMessage(state, 'second', 'prompt-1')?.blocks,
+      ).toHaveLength(2);
+    });
+
+    it('is exposed by the store and reports whether it claimed', () => {
+      const store = createDaemonTranscriptStore();
+      expect(store.claimLocalUserMessage('hello', 'prompt-1')).toBe(false);
+
+      store.appendLocalUserMessage('hello');
+      expect(store.claimLocalUserMessage('hello', 'prompt-1')).toBe(true);
+      expect(store.getSnapshot().blocks).toHaveLength(1);
+      // A second claim for the same text must not steal the bound block.
+      expect(store.claimLocalUserMessage('hello', 'prompt-2')).toBe(false);
+    });
   });
 
   it('reconciles daemon user echoes with an optimistic attachment message', () => {

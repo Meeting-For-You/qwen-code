@@ -1237,7 +1237,13 @@ export function useQueuedPrompts({
             )
           ) {
             displayedServerPromptIdsRef.current.add(promptId);
-            store.appendLocalUserMessage(eventText, undefined, undefined);
+            // The daemon publishes a started event for immediate prompts too.
+            // A prompt sent straight from the composer is already on screen
+            // as an optimistic message: bind the prompt id to it rather than
+            // rendering the same message twice.
+            if (!store.claimLocalUserMessage(eventText, promptId)) {
+              store.appendLocalUserMessage(eventText, undefined, undefined);
+            }
           }
           if (!prompt?.serverPromptId) {
             pendingStartedByPromptIdRef.current.set(promptId, eventText);

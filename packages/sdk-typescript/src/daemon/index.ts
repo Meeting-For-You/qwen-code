@@ -88,6 +88,7 @@ export {
 export { parseSseStream, SseFramingError } from './sse.js';
 export {
   appendLocalUserTranscriptMessage,
+  claimLocalUserTranscriptMessage,
   createDaemonToolPreview,
   createDaemonTranscriptState,
   createDaemonTranscriptStore,

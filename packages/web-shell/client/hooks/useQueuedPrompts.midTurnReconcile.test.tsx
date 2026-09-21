@@ -114,6 +114,7 @@ function createHarness() {
   // the hook's callbacks and re-firing its effects on each commit.
   const stableStore = {
     appendLocalUserMessage: vi.fn(),
+    claimLocalUserMessage: vi.fn(() => false),
     dispatch: vi.fn(),
   };
   const stableEditor = {
@@ -2376,6 +2377,75 @@ describe('useQueuedPrompts mid-turn reconciliation (session_mid_turn_message_que
         ]);
       });
       expect(onComplete).toHaveBeenCalledTimes(1);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it('binds an immediate prompt already shown optimistically instead of rendering it twice', async () => {
+    // The daemon publishes a started event for prompts that start right away.
+    // A prompt sent straight from the composer is already on screen as an
+    // optimistic local message, so the started event must claim that message
+    // rather than append a second copy.
+    const harness = createHarness();
+    try {
+      await harness.render({});
+      harness.store.claimLocalUserMessage.mockReturnValueOnce(true);
+
+      await act(async () => {
+        sdkMock.publishPendingEvents([
+          {
+            type: 'pending_prompt_started',
+            promptId: 'prompt-immediate',
+            originatorClientId: CLIENT_ID,
+            data: {
+              sessionId: 'session-a',
+              promptId: 'prompt-immediate',
+              text: 'sent directly',
+            },
+          },
+        ]);
+      });
+
+      expect(harness.store.claimLocalUserMessage).toHaveBeenCalledWith(
+        'sent directly',
+        'prompt-immediate',
+      );
+      expect(harness.store.appendLocalUserMessage).not.toHaveBeenCalled();
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it('renders the started prompt when there is no optimistic message to claim', async () => {
+    const harness = createHarness();
+    try {
+      await harness.render({});
+
+      await act(async () => {
+        sdkMock.publishPendingEvents([
+          {
+            type: 'pending_prompt_started',
+            promptId: 'prompt-unseen',
+            originatorClientId: CLIENT_ID,
+            data: {
+              sessionId: 'session-a',
+              promptId: 'prompt-unseen',
+              text: 'sent elsewhere',
+            },
+          },
+        ]);
+      });
+
+      expect(harness.store.claimLocalUserMessage).toHaveBeenCalledWith(
+        'sent elsewhere',
+        'prompt-unseen',
+      );
+      expect(harness.store.appendLocalUserMessage).toHaveBeenCalledWith(
+        'sent elsewhere',
+        undefined,
+        undefined,
+      );
     } finally {
       await harness.dispose();
     }
