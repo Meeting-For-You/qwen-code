@@ -1506,13 +1506,13 @@ describe('createDaemonSessionActions', () => {
         {
           name: 'notes.txt',
           mimeType: 'text/plain',
+          data: expect.any(Blob),
           text: 'hello',
-          attachmentId: 'notes.txt',
         },
       ],
     );
-    expect(session.uploadAttachment.mock.invocationCallOrder[0]).toBeLessThan(
-      store.appendLocalUserMessage.mock.invocationCallOrder[0]!,
+    expect(store.appendLocalUserMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      session.uploadAttachment.mock.invocationCallOrder[0]!,
     );
   });
 

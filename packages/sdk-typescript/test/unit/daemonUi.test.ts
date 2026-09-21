@@ -65,6 +65,39 @@ describe('daemon UI normalizer and transcript reducer', () => {
     ]);
   });
 
+  it('reconciles daemon user echoes with an optimistic attachment message', () => {
+    let state = createDaemonTranscriptState({ now: 1 });
+    state = appendLocalUserTranscriptMessage(state, 'look', {
+      now: 2,
+      images: [{ data: 'AQID', mimeType: 'image/png' }],
+    });
+
+    state = reduceDaemonTranscriptEvents(state, [
+      {
+        type: 'user.text.delta',
+        text: 'look',
+        sourceRecordIds: ['record-1'],
+        promptId: 'prompt-1',
+      },
+      {
+        type: 'user.image.delta',
+        data: 'AQID',
+        mimeType: 'image/png',
+        sourceRecordIds: ['record-1'],
+        promptId: 'prompt-1',
+      },
+    ], { now: 3 });
+
+    expect(state.blocks).toHaveLength(1);
+    expect(state.blocks[0]).toMatchObject({
+      kind: 'user',
+      text: 'look',
+      promptId: 'prompt-1',
+      sourceRecordIds: ['record-1'],
+      images: [{ data: 'AQID', mimeType: 'image/png' }],
+    });
+  });
+
   it('attaches branchRecordId when the decorated chunk merges into an existing block', () => {
     // A checkpointed record replayed as 2+ chunks creates its block from
     // the first (undecorated) chunk; the decorated final chunk must merge

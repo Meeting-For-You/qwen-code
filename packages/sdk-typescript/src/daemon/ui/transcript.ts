@@ -173,6 +173,9 @@ export function appendLocalUserTranscriptMessage(
   if (opts.files && opts.files.length > 0) {
     (block as DaemonTextTranscriptBlock).files = [...opts.files];
   }
+  if ((opts.images?.length ?? 0) > 0 || (opts.files?.length ?? 0) > 0) {
+    block.meta = { ...block.meta, optimisticLocalAttachment: true };
+  }
   appendBlock(next, block);
   next.activeUserBlockId = block.id;
   return trimTranscriptState(next);
@@ -268,6 +271,17 @@ function userBlockForAttachment(
     const block = getWritableBlockById(next, activeUser.id);
     if (block?.kind === 'user') return block;
   }
+  if (
+    activeUser?.kind === 'user' &&
+    activeUser.sourceRecordIds === undefined &&
+    ((activeUser.images?.length ?? 0) > 0 || (activeUser.files?.length ?? 0) > 0)
+  ) {
+    const block = getWritableBlockById(next, activeUser.id);
+    if (block?.kind === 'user') {
+      reconcileOptimisticUserBlock(block, event);
+      return block;
+    }
+  }
   const block = createTextBlock(
     next,
     'user',
@@ -335,10 +349,7 @@ function applyDaemonTranscriptEvent(
       // against the byte budget.
       const bytesBefore = estimateBlockBytes(block);
       if (event.meta) block.meta = { ...block.meta, ...event.meta };
-      block.images = [
-        ...(block.images ?? []),
-        { data: event.data, mimeType: event.mimeType },
-      ];
+      appendUserAttachmentIfMissing(block, event);
       next.retainedBytes += estimateBlockBytes(block) - bytesBefore;
       break;
     }
@@ -346,14 +357,7 @@ function applyDaemonTranscriptEvent(
       const fileBlock = userBlockForAttachment(next, event);
       const fileBytesBefore = estimateBlockBytes(fileBlock);
       if (event.meta) fileBlock.meta = { ...fileBlock.meta, ...event.meta };
-      fileBlock.files = [
-        ...(fileBlock.files ?? []),
-        {
-          name: event.name,
-          mimeType: event.mimeType,
-          attachmentId: event.attachmentId,
-        },
-      ];
+      appendUserAttachmentIfMissing(fileBlock, event);
       next.retainedBytes += estimateBlockBytes(fileBlock) - fileBytesBefore;
       break;
     }
@@ -802,6 +806,10 @@ function appendTextDelta(
     parentMap && parentId != null ? parentMap[parentId] : state[activeKey];
 
   const existing = getWritableBlockById(state, effectiveId);
+  if (kind === 'user' && existing?.kind === 'user') {
+    const reconciled = reconcileOptimisticUserBlock(existing, event, text);
+    if (reconciled) return;
+  }
   if (
     existing &&
     existing.kind === kind &&
@@ -870,6 +878,69 @@ function appendTextDelta(
     if (kind !== 'user') state.activeUserBlockId = undefined;
     if (kind !== 'assistant') clearActiveAssistant(state);
     if (kind !== 'thought') clearActiveThought(state);
+  }
+}
+
+function reconcileOptimisticUserBlock(
+  block: DaemonTextTranscriptBlock,
+  event: DaemonUiEvent,
+  text?: string,
+): boolean {
+  if (block.sourceRecordIds !== undefined || event.sourceRecordIds?.length === 0) {
+    return false;
+  }
+  if (text !== undefined && block.text !== text) return false;
+  if (event.sourceRecordIds !== undefined) {
+    block.sourceRecordIds = [...event.sourceRecordIds];
+  }
+  if (event.promptId !== undefined) block.promptId = event.promptId;
+  if (event.eventId !== undefined) block.eventId = event.eventId;
+  if (event.serverTimestamp !== undefined) {
+    block.serverTimestamp = event.serverTimestamp;
+  }
+  if ('meta' in event && event.meta) {
+    block.meta = { ...block.meta, ...event.meta };
+  }
+  if (event.type === 'user.image.delta') {
+    appendUserAttachmentIfMissing(block, event);
+  } else if (event.type === 'user.file.delta') {
+    appendUserAttachmentIfMissing(block, event);
+  }
+  return true;
+}
+
+function appendUserAttachmentIfMissing(
+  block: DaemonTextTranscriptBlock,
+  event: Extract<DaemonUiEvent, { type: 'user.image.delta' | 'user.file.delta' }>,
+): void {
+  const dedupeOptimisticAttachment = block.meta?.optimisticLocalAttachment === true;
+  if (event.type === 'user.image.delta') {
+    block.images ??= [];
+    if (!dedupeOptimisticAttachment || !block.images.some(
+      (image) => image.data === event.data && image.mimeType === event.mimeType,
+    )) {
+      block.images.push({ data: event.data, mimeType: event.mimeType });
+    }
+    if (dedupeOptimisticAttachment && block.meta) {
+      const { optimisticLocalAttachment: _optimisticLocalAttachment, ...meta } = block.meta;
+      block.meta = Object.keys(meta).length > 0 ? meta : undefined;
+    }
+    return;
+  }
+  block.files ??= [];
+  if (!dedupeOptimisticAttachment || !block.files.some(
+    (file) => file.attachmentId !== undefined
+      && file.attachmentId === event.attachmentId,
+  )) {
+    block.files.push({
+      name: event.name,
+      mimeType: event.mimeType,
+      attachmentId: event.attachmentId,
+    });
+  }
+  if (dedupeOptimisticAttachment && block.meta) {
+    const { optimisticLocalAttachment: _optimisticLocalAttachment, ...meta } = block.meta;
+    block.meta = Object.keys(meta).length > 0 ? meta : undefined;
   }
 }
 

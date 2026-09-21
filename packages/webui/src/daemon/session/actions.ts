@@ -711,16 +711,13 @@ export function createDaemonSessionActions({
             : undefined;
         const shouldAppendOptimisticMessage =
           options?.optimisticUserMessage !== false;
-        const optimisticMessageAppended =
-          shouldAppendOptimisticMessage &&
-          displayedImages.length === 0 &&
-          displayedFiles.length === 0;
+        const optimisticMessageAppended = shouldAppendOptimisticMessage;
         if (optimisticMessageAppended) {
           store.appendLocalUserMessage(
             text,
             displayedImages,
             inputAnnotations ? { inputAnnotations } : undefined,
-            [],
+            promptFilesForTranscript(displayedFiles, [], true),
           );
         }
         let uploaded: Awaited<
@@ -735,26 +732,10 @@ export function createDaemonSessionActions({
             ctrl.signal,
           );
         } catch (error) {
-          if (shouldAppendOptimisticMessage && !optimisticMessageAppended) {
-            store.appendLocalUserMessage(
-              text,
-              displayedImages,
-              inputAnnotations ? { inputAnnotations } : undefined,
-              promptFilesForTranscript(displayedFiles, [], true),
-            );
-          }
           throw error instanceof AttachmentUploadError ? error.reason : error;
         }
         if (ctrl.signal.aborted) {
           await removeUploadedAttachments(session, uploaded.references);
-          if (shouldAppendOptimisticMessage && !optimisticMessageAppended) {
-            store.appendLocalUserMessage(
-              text,
-              displayedImages,
-              inputAnnotations ? { inputAnnotations } : undefined,
-              promptFilesForTranscript(displayedFiles, [], true),
-            );
-          }
           ctrl.signal.throwIfAborted();
         }
         const promptRequest: Record<string, unknown> = {
@@ -778,27 +759,7 @@ export function createDaemonSessionActions({
           if (definiteRejection) {
             await removeUploadedAttachments(session, uploaded.references);
           }
-          if (shouldAppendOptimisticMessage && !optimisticMessageAppended) {
-            store.appendLocalUserMessage(
-              text,
-              displayedImages,
-              inputAnnotations ? { inputAnnotations } : undefined,
-              promptFilesForTranscript(
-                displayedFiles,
-                definiteRejection ? [] : uploaded.fileReferences,
-                definiteRejection,
-              ),
-            );
-          }
           throw error;
-        }
-        if (shouldAppendOptimisticMessage && !optimisticMessageAppended) {
-          store.appendLocalUserMessage(
-            text,
-            displayedImages,
-            inputAnnotations ? { inputAnnotations } : undefined,
-            promptFilesForTranscript(displayedFiles, uploaded.fileReferences),
-          );
         }
         if (activePromptsRef.current.get(sessionId)?.controller === ctrl) {
           restartEventStream(sessionId);
@@ -872,16 +833,13 @@ export function createDaemonSessionActions({
           : undefined;
       const shouldAppendOptimisticMessage =
         options?.optimisticUserMessage !== false;
-      const optimisticMessageAppended =
-        shouldAppendOptimisticMessage &&
-        displayedImages.length === 0 &&
-        displayedFiles.length === 0;
+      const optimisticMessageAppended = shouldAppendOptimisticMessage;
       if (optimisticMessageAppended) {
         store.appendLocalUserMessage(
           text,
           displayedImages,
           inputAnnotations ? { inputAnnotations } : undefined,
-          [],
+          promptFilesForTranscript(displayedFiles, [], true),
         );
       }
       let uploaded: Awaited<
@@ -896,14 +854,6 @@ export function createDaemonSessionActions({
           options?.signal,
         );
       } catch (error) {
-        if (shouldAppendOptimisticMessage && !optimisticMessageAppended) {
-          store.appendLocalUserMessage(
-            text,
-            displayedImages,
-            inputAnnotations ? { inputAnnotations } : undefined,
-            promptFilesForTranscript(displayedFiles, [], true),
-          );
-        }
         throw error instanceof AttachmentUploadError ? error.reason : error;
       }
       const promptRequest: Record<string, unknown> = {
@@ -926,27 +876,7 @@ export function createDaemonSessionActions({
         if (definiteRejection) {
           await removeUploadedAttachments(session, uploaded.references);
         }
-        if (shouldAppendOptimisticMessage && !optimisticMessageAppended) {
-          store.appendLocalUserMessage(
-            text,
-            displayedImages,
-            inputAnnotations ? { inputAnnotations } : undefined,
-            promptFilesForTranscript(
-              displayedFiles,
-              definiteRejection ? [] : uploaded.fileReferences,
-              definiteRejection,
-            ),
-          );
-        }
         throw error;
-      }
-      if (shouldAppendOptimisticMessage && !optimisticMessageAppended) {
-        store.appendLocalUserMessage(
-          text,
-          displayedImages,
-          inputAnnotations ? { inputAnnotations } : undefined,
-          promptFilesForTranscript(displayedFiles, uploaded.fileReferences),
-        );
       }
       if (options?.signal?.aborted) {
         try {
