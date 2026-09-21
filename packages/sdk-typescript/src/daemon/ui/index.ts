@@ -12,6 +12,7 @@ export {
 export { createDaemonToolPreview } from './toolPreview.js';
 export {
   appendLocalUserTranscriptMessage,
+  claimLocalUserTranscriptMessage,
   createDaemonTranscriptState,
   estimateDaemonTranscriptBlockBytes,
   formatBlockTimestamp,

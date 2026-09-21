@@ -49657,7 +49657,7 @@ function $6({
           );
           if (Ie ? (Ie.onComplete && Ee(fe, Ie.onComplete), Fe(Ie, fe), Ie.serverPromptId || Y.current.add(fe)) : pe && !T.current.some(
             (He) => !He.serverPromptId && He.serverState === "submitting"
-          ) && (V.current.add(fe), w.appendLocalUserMessage(pe, void 0, void 0)), !(Ie != null && Ie.serverPromptId))
+          ) && (V.current.add(fe), w.claimLocalUserMessage(pe, fe) || w.appendLocalUserMessage(pe, void 0, void 0)), !(Ie != null && Ie.serverPromptId))
             for (Se.current.set(fe, pe); Se.current.size > 200; ) {
               const He = Se.current.keys().next().value;
               if (typeof He != "string") break;
