@@ -9113,6 +9113,71 @@ describe('Server Config (config.ts)', () => {
       expect(deferred).toContain(ToolNames.SEND_MESSAGE);
     });
 
+    // Regression guard for a real deployment's exact settings (schedule-agent's
+    // meeting-agent daemon config): permissions.deny lists the filesystem/shell
+    // surface it never wants reachable ("task" is the documented legacy alias
+    // for "agent"). A model that only ever sees a denied tool get rejected at
+    // call time can still spend a whole turn on `tool_search select:<name>`
+    // first, since a schema search costs nothing to try — this test pins that
+    // deny already means "absent from ToolSearch/registry", not just "rejected
+    // once called", so that assumption never silently regresses.
+    it('denied filesystem/shell tools are fully absent from the registry, not just rejected at call time (meeting-agent daemon config)', async () => {
+      const params: ConfigParameters = {
+        ...baseParams,
+        useRipgrep: false,
+        coreTools: undefined,
+        permissions: {
+          allow: ['mcp__yilian'],
+          deny: [
+            'task',
+            'run_shell_command',
+            'read_file',
+            'write_file',
+            'edit',
+            'glob',
+            'list_directory',
+          ],
+        },
+      };
+      const config = new Config(params);
+      await config.initialize();
+
+      const { registerFactory, registerPermissionDeferredFactory } = (
+        (await vi.importMock('../tools/tool-registry')) as {
+          ToolRegistry: {
+            prototype: {
+              registerFactory: Mock;
+              registerPermissionDeferredFactory: Mock;
+            };
+          };
+        }
+      ).ToolRegistry.prototype;
+
+      const registered = (registerFactory as Mock).mock.calls.map(
+        (call) => call[0],
+      ) as string[];
+      const deferred = (
+        registerPermissionDeferredFactory as Mock
+      ).mock.calls.map((call) => call[0]) as string[];
+
+      for (const denied of [
+        ToolNames.AGENT, // "task" is its legacy alias
+        ToolNames.SHELL,
+        ToolNames.READ_FILE,
+        ToolNames.WRITE_FILE,
+        ToolNames.EDIT,
+        ToolNames.GLOB,
+        ToolNames.LS,
+      ]) {
+        expect(registered).not.toContain(denied);
+        expect(deferred).not.toContain(denied);
+      }
+      // skill/tool_search themselves must stay reachable — deny only removes
+      // the filesystem/shell surface, not the agent's own working tools.
+      expect(registered).toContain(ToolNames.SKILL);
+      expect(registered).toContain(ToolNames.TOOL_SEARCH);
+    });
+
     describe('with minified tool class names', () => {
       beforeEach(() => {
         Object.defineProperty(
