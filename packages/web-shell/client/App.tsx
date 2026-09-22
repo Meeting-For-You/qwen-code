@@ -1049,6 +1049,28 @@ export interface WebShellProps {
    */
   onSlashCommand?: WebShellSlashCommandHandler;
   /**
+   * Called before Web Shell creates a new session from the sidebar's New
+   * Chat button — the one entry point that calls `createNewSession` directly
+   * and, unlike `/new`/`/clear`/`/reset`, never reaches `onSlashCommand`.
+   * Return `true` (or a Promise resolving `true`) to skip Web Shell's own
+   * `createNewSession` after handling it in the host; return
+   * `false`/`undefined` to fall through to the built-in behavior. Does NOT
+   * cover the input-based "start a new session?" suggestion banner (see
+   * `newSessionSuggestionEnabled` to disable that banner outright instead).
+   *
+   * Hosts that bind one Web Shell session to one backend resource (a
+   * workspace, a ticket, a document — anything narrower than "the daemon's
+   * primary workspace") need this: `createNewSession` only starts a new chat
+   * inside the *same* backend resource, so without overriding this prop the
+   * sidebar's New Chat button silently keeps every "new" session bound to
+   * whatever resource the page happened to be showing, with no way to tell
+   * from the UI that nothing was actually reset. A host that already
+   * intercepts `/new`/`/clear`/`/reset` via `onSlashCommand` should set this
+   * to the same handler for the sidebar button to behave consistently with
+   * those slash commands.
+   */
+  onNewSession?: (workspaceCwd?: string) => Promise<boolean> | boolean;
+  /**
    * Controls whether Web Shell's input-based "start a new session?" suggestion
    * banner can appear. Accepting it calls the same session-creation path as
    * the sidebar's New Chat button and `/new`/`/clear`/`/reset` — hosts that
@@ -1960,6 +1982,7 @@ export function App({
   hiddenSlashCommands,
   slashCommandCategoryOrder,
   onSlashCommand,
+  onNewSession: onNewSessionHost,
   newSessionSuggestionEnabled,
   builtinAtProviders,
   atProviders,
@@ -12320,7 +12343,13 @@ export function App({
                       webShellThemeToSettingValue(theme),
                     );
                   }}
-                  onNewSession={(workspaceCwd) => createNewSession(workspaceCwd)}
+                  onNewSession={async (workspaceCwd) => {
+                    if (onNewSessionHost) {
+                      const handled = await onNewSessionHost(workspaceCwd);
+                      if (handled) return true;
+                    }
+                    return createNewSession(workspaceCwd);
+                  }}
                   onLoadSession={(sessionId, workspaceCwd) => {
                     setMainView('chat');
                     return loadSidebarSession(sessionId, workspaceCwd);
