@@ -1258,8 +1258,8 @@ export function WebShellSidebar({
   >(() => new Map());
   const {
     sessions: archivedSessions,
-    loading: archivedLoading,
     error: archivedError,
+    data: archivedSessionsPage,
     reload: reloadArchived,
     deleteSession: deleteArchivedSession,
     unarchiveSession,
@@ -1685,9 +1685,6 @@ export function WebShellSidebar({
       ),
     [secondaryArchivedSnapshots],
   );
-  const secondaryArchivedLoading = secondaryArchivedSnapshots.some(
-    (snapshot) => snapshot.loading,
-  );
   const secondaryArchivedError = secondaryArchivedSnapshots.some(
     (snapshot) => snapshot.error !== undefined,
   );
@@ -2055,9 +2052,6 @@ export function WebShellSidebar({
     selectedSessionSource,
     secondaryArchivedSessions,
   ]);
-  const effectiveArchivedLoading =
-    (includePrimaryWorkspaceSessions && archivedLoading) ||
-    secondaryArchivedLoading;
   const effectiveArchivedError =
     (includePrimaryWorkspaceSessions && Boolean(archivedError)) ||
     secondaryArchivedError;
@@ -3481,6 +3475,17 @@ export function WebShellSidebar({
       if (!canArchiveSession(session)) return;
       if (busySessionIdsRef.current.has(sessionIdentity)) return;
       const scope = resolveSessionWorkspaceScope(session);
+      const workspaceCwd = session.workspaceCwd ?? primaryWorkspaceCwd;
+      // Reflect the archive immediately, the same way handleTogglePin does:
+      // the catalog store drops the row from every loaded 'active' page and
+      // adds it to every loaded 'archived' page, so the row disappears from
+      // the visible list right on click instead of after the RPC and the
+      // refresh below land. Roll back on failure.
+      if (workspaceCwd) {
+        sessionCatalogController.toggleSessionArchived(workspaceCwd, session, {
+          archived: true,
+        });
+      }
       setSessionBusy(sessionId, true, session.workspaceCwd);
       void (async () => {
         try {
@@ -3492,6 +3497,13 @@ export function WebShellSidebar({
               (entry) => entry.sessionId === sessionId,
             );
             if (itemError) {
+              if (workspaceCwd) {
+                sessionCatalogController.toggleSessionArchived(
+                  workspaceCwd,
+                  session,
+                  { archived: false },
+                );
+              }
               onError(new Error(itemError.error), t('sidebar.archiveFailed'));
             }
           } else if (scope.kind === 'primary') {
@@ -3500,10 +3512,16 @@ export function WebShellSidebar({
             return;
           }
         } catch (err) {
+          if (workspaceCwd) {
+            sessionCatalogController.toggleSessionArchived(
+              workspaceCwd,
+              session,
+              { archived: false },
+            );
+          }
           onError(err, t('sidebar.archiveFailed'));
         } finally {
           bumpWorkspaceReload();
-          const workspaceCwd = session.workspaceCwd ?? primaryWorkspaceCwd;
           if (scope.kind !== 'primary' && workspaceCwd) {
             sessionCatalogController.refreshWorkspace(workspaceCwd);
           }
@@ -3533,6 +3551,12 @@ export function WebShellSidebar({
       if (!canUnarchiveSession(session)) return;
       if (busySessionIdsRef.current.has(sessionIdentity)) return;
       const scope = resolveSessionWorkspaceScope(session);
+      const workspaceCwd = session.workspaceCwd ?? primaryWorkspaceCwd;
+      if (workspaceCwd) {
+        sessionCatalogController.toggleSessionArchived(workspaceCwd, session, {
+          archived: false,
+        });
+      }
       setSessionBusy(sessionId, true, session.workspaceCwd);
       void (async () => {
         try {
@@ -3544,6 +3568,13 @@ export function WebShellSidebar({
               (entry) => entry.sessionId === sessionId,
             );
             if (itemError) {
+              if (workspaceCwd) {
+                sessionCatalogController.toggleSessionArchived(
+                  workspaceCwd,
+                  session,
+                  { archived: true },
+                );
+              }
               onError(new Error(itemError.error), t('sidebar.unarchiveFailed'));
             }
           } else if (scope.kind === 'primary') {
@@ -3552,10 +3583,16 @@ export function WebShellSidebar({
             return;
           }
         } catch (err) {
+          if (workspaceCwd) {
+            sessionCatalogController.toggleSessionArchived(
+              workspaceCwd,
+              session,
+              { archived: true },
+            );
+          }
           onError(err, t('sidebar.unarchiveFailed'));
         } finally {
           bumpWorkspaceReload();
-          const workspaceCwd = session.workspaceCwd ?? primaryWorkspaceCwd;
           if (scope.kind !== 'primary' && workspaceCwd) {
             sessionCatalogController.refreshWorkspace(workspaceCwd);
           }
@@ -4832,19 +4869,34 @@ export function WebShellSidebar({
     // Gate notices on the resource, not the filtered view: background
     // refreshes set loading/error while retaining the settled page, so a
     // filter-empty or empty-but-settled view must not flash or swap to retry.
-    if (loading && sessionsPage === undefined) {
+    //
+    // Gate on `sessionsPage === undefined` alone, not `loading`: the catalog
+    // snapshot starts as `{ loading: false, page: undefined }` before the
+    // subscribe effect has actually run (useSyncExternalStore reads the
+    // initial snapshot during render, before subscribing in the commit
+    // phase), and `autoLoad`/the query key itself flip during startup as
+    // `sessionCatalogRequestsEnabled`/`organizationEnabled`/live-state
+    // capabilities resolve — each flip re-subscribes through this same
+    // false/undefined gap. Treating `loading === false` as "settled" there
+    // misclassifies every one of those gaps as "no sessions" and flashes the
+    // empty notice before the (blank) loading state reappears. `page ===
+    // undefined` is the correct "never settled" signal (mirrors
+    // `sessionsCatalogReady` above): a genuinely empty result still gets a
+    // defined page. An error still surfaces even while unsettled — only the
+    // "no sessions" misclassification is what this replaces `loading` for.
+    if (sessionsPage === undefined) {
+      if (error) {
+        return (
+          <button
+            className={styles.retry}
+            type="button"
+            onClick={() => void reload({ interactive: true })}
+          >
+            {t('sidebar.loadFailed')}
+          </button>
+        );
+      }
       return null;
-    }
-    if (error && sessionsPage === undefined) {
-      return (
-        <button
-          className={styles.retry}
-          type="button"
-          onClick={() => void reload({ interactive: true })}
-        >
-          {t('sidebar.loadFailed')}
-        </button>
-      );
     }
     if (
       filteredSessions.length === 0 &&
@@ -4942,7 +4994,6 @@ export function WebShellSidebar({
     groupBusy,
     handleDeleteGroup,
     handleRenameGroup,
-    loading,
     organizationEnabled,
     pinnedExpanded,
     pinnedSessions,
@@ -5004,9 +5055,21 @@ export function WebShellSidebar({
     const archivedCount =
       allArchivedSessions.length +
       (standaloneSessionsVisible ? standaloneArchivedStatus.count : 0);
-    const archivedLoadingWithStandalone =
-      effectiveArchivedLoading ||
-      (standaloneSessionsVisible && standaloneArchivedStatus.loading);
+    // Same fix as the main list above: gate the pre-data notice on every
+    // merged catalog query's page being defined, not on a `loading` flag
+    // that reads false before the query has actually subscribed (see the
+    // comment on the main list's gate). `StandaloneRecents` owns its own
+    // mount-effect fetch and isn't part of that race, so its `loading` flag
+    // is trusted as-is here.
+    const archivedCatalogSettled =
+      (!includePrimaryWorkspaceSessions ||
+        archivedSessionsPage !== undefined) &&
+      secondaryArchivedSnapshots.every(
+        (snapshot) => snapshot.page !== undefined,
+      );
+    const archivedSettled =
+      archivedCatalogSettled &&
+      (!standaloneSessionsVisible || !standaloneArchivedStatus.loading);
     const archivedErrorWithStandalone =
       effectiveArchivedError ||
       (standaloneSessionsVisible && standaloneArchivedStatus.error);
@@ -5050,13 +5113,14 @@ export function WebShellSidebar({
       </button>
     );
     let notice: ReactNode;
-    if (
-      !archivedLoadingWithStandalone &&
-      archivedErrorWithStandalone &&
-      archivedCount === 0
-    ) {
+    if (!archivedSettled) {
+      // Still settling: surface an error if one is already known, otherwise
+      // render nothing (matches the main list's "blank while unsettled"
+      // convention above) rather than flashing "no archived sessions".
+      notice = archivedErrorWithStandalone ? retry : undefined;
+    } else if (archivedErrorWithStandalone && archivedCount === 0) {
       notice = retry;
-    } else if (!archivedLoadingWithStandalone && archivedCount === 0) {
+    } else if (archivedCount === 0) {
       notice = (
         <div className={styles.notice}>{t('sidebar.archivedEmpty')}</div>
       );
@@ -5122,13 +5186,14 @@ export function WebShellSidebar({
   }, [
     archivedContentMounted,
     archivedExpanded,
+    archivedSessionsPage,
     archivedWorkspaceGroups,
     allArchivedSessions,
     connection.sessionId,
     effectiveArchivedError,
-    effectiveArchivedLoading,
     handleStandaloneArchivedStatus,
     handleStandaloneMutation,
+    includePrimaryWorkspaceSessions,
     onError,
     onLoadStandaloneSession,
     onSessionRenameConfirmed,
@@ -5136,6 +5201,7 @@ export function WebShellSidebar({
     reloadArchived,
     renderSessionRow,
     searchQuery,
+    secondaryArchivedSnapshots,
     secondaryWorkspaceCwds,
     sessionCatalogController,
     sessionArchiveEnabled,
