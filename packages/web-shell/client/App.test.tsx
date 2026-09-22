@@ -10486,6 +10486,58 @@ describe('App session callbacks', () => {
     expect(arg?.['branch']).toBeUndefined();
   });
 
+  it('lets onNewSession intercept the sidebar New Chat button and skip the built-in session creation', async () => {
+    const onNewSession = vi.fn().mockResolvedValue(true);
+    const { container } = renderApp({ onNewSession });
+    await flush();
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[data-testid="new-session"]')
+        ?.click();
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(onNewSession).toHaveBeenCalledTimes(1);
+    // A `true` return means the host handled it — Web Shell's own
+    // createNewSession() (clearSession() is its first daemon call) must not
+    // also run, or the host and Web Shell would race to reset the session.
+    expect(mockSessionActions.clearSession).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the built-in session creation when onNewSession declines or is absent', async () => {
+    const onNewSession = vi.fn().mockResolvedValue(false);
+    const { container } = renderApp({ onNewSession });
+    await flush();
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[data-testid="new-session"]')
+        ?.click();
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(onNewSession).toHaveBeenCalledTimes(1);
+    expect(mockSessionActions.clearSession).toHaveBeenCalled();
+  });
+
+  it('runs the built-in session creation as before when onNewSession is not provided (backward compatibility)', async () => {
+    const { container } = renderApp();
+    await flush();
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[data-testid="new-session"]')
+        ?.click();
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(mockSessionActions.clearSession).toHaveBeenCalled();
+  });
+
   it('hides the git mode chip when the workspace is not trusted', async () => {
     mockConnection.sessionId = undefined;
     mockWorkspace.capabilities = {
