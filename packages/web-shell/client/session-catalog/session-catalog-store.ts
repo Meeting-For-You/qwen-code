@@ -632,6 +632,78 @@ export class SessionCatalogStore {
     }
   }
 
+  /**
+   * Apply an archive/unarchive toggle optimistically, mirroring
+   * `applySessionPinToggle`: every loaded page of the workspace is patched
+   * in place, `archiveState`-filtered pages (`'active'` / `'archived'`) gain
+   * or lose the row, and the rest just flip `isArchived`. This is what makes
+   * an archive click remove the row from the visible list immediately
+   * instead of waiting for the RPC round-trip and the subsequent
+   * authoritative refetch to land.
+   */
+  applySessionArchiveToggle(
+    workspaceCwd: string,
+    session: DaemonSessionSummary,
+    toggle: { archived: boolean },
+  ): void {
+    for (const entry of this.entries.values()) {
+      if (entry.query.workspaceCwd !== workspaceCwd || !entry.snapshot.page) {
+        continue;
+      }
+      const page = entry.snapshot.page;
+      const carriesRow = (candidate: DaemonSessionSummary): boolean =>
+        candidate.workspaceCwd === workspaceCwd &&
+        candidate.sessionId === session.sessionId;
+      const archiveState = entry.query.options.archiveState;
+      if (archiveState === 'active' || archiveState === 'archived') {
+        const belongs =
+          archiveState === 'archived' ? toggle.archived : !toggle.archived;
+        if (belongs) {
+          const nextSession: DaemonSessionSummary = {
+            ...session,
+            workspaceCwd,
+            isArchived: toggle.archived,
+          };
+          const exists = page.sessions.some(carriesRow);
+          this.setSnapshot(entry, {
+            ...entry.snapshot,
+            page: {
+              ...page,
+              sessions: exists
+                ? page.sessions.map((candidate) =>
+                    carriesRow(candidate) ? nextSession : candidate,
+                  )
+                : [...page.sessions, nextSession],
+            },
+          });
+        } else if (page.sessions.some(carriesRow)) {
+          this.setSnapshot(entry, {
+            ...entry.snapshot,
+            page: {
+              ...page,
+              sessions: page.sessions.filter(
+                (candidate) => !carriesRow(candidate),
+              ),
+            },
+          });
+        }
+        continue;
+      }
+      if (!page.sessions.some(carriesRow)) continue;
+      this.setSnapshot(entry, {
+        ...entry.snapshot,
+        page: {
+          ...page,
+          sessions: page.sessions.map((candidate) =>
+            carriesRow(candidate)
+              ? { ...candidate, isArchived: toggle.archived }
+              : candidate,
+          ),
+        },
+      });
+    }
+  }
+
   getLiveSession(
     workspaceCwd: string,
     sessionId: string,
