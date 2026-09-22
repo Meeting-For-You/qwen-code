@@ -680,6 +680,84 @@ describe('SessionCatalogStore', () => {
     });
   });
 
+  describe('applySessionArchiveToggle', () => {
+    const archivedView = (workspaceCwd: string): SessionCatalogQuery => ({
+      routeKind: 'legacy',
+      workspaceCwd,
+      options: { pageSize: 1000, archiveState: 'archived' },
+    });
+
+    it('archives by dropping the row from a loaded active page and adding it to a loaded archived page', async () => {
+      const row = { sessionId: 'plain', workspaceCwd: '/work' };
+      const sibling = { sessionId: 'sibling', workspaceCwd: '/work' };
+      legacy.mockImplementation(
+        async (_cwd: string, options: { archiveState?: string }) =>
+          options?.archiveState === 'archived'
+            ? { sessions: [] }
+            : { sessions: [row, sibling] },
+      );
+      await store.loadOnce(query('/work'), { fresh: true });
+      await store.loadOnce(archivedView('/work'), { fresh: true });
+
+      store.applySessionArchiveToggle('/work', { ...row }, { archived: true });
+
+      expect(
+        store
+          .getSnapshot(query('/work'))
+          .page?.sessions.map((session) => session.sessionId),
+      ).toEqual(['sibling']);
+      expect(store.getSnapshot(archivedView('/work')).page?.sessions).toEqual([
+        { ...row, workspaceCwd: '/work', isArchived: true },
+      ]);
+    });
+
+    it('unarchives by dropping the row from the archived page and adding it back to the active page', async () => {
+      const row = {
+        sessionId: 'plain',
+        workspaceCwd: '/work',
+        isArchived: true,
+      };
+      legacy.mockImplementation(
+        async (_cwd: string, options: { archiveState?: string }) =>
+          options?.archiveState === 'archived'
+            ? { sessions: [row] }
+            : { sessions: [] },
+      );
+      await store.loadOnce(query('/work'), { fresh: true });
+      await store.loadOnce(archivedView('/work'), { fresh: true });
+
+      store.applySessionArchiveToggle('/work', { ...row }, { archived: false });
+
+      expect(store.getSnapshot(archivedView('/work')).page?.sessions).toEqual(
+        [],
+      );
+      expect(store.getSnapshot(query('/work')).page?.sessions).toEqual([
+        { ...row, isArchived: false },
+      ]);
+    });
+
+    it('leaves unloaded and foreign-workspace pages alone', async () => {
+      const row = { sessionId: 'plain', workspaceCwd: '/work' };
+      legacy.mockImplementation(async (cwd: string) => ({
+        sessions:
+          cwd === '/work'
+            ? [row]
+            : [{ sessionId: 'foreign', workspaceCwd: cwd }],
+      }));
+      await store.loadOnce(query('/work'), { fresh: true });
+      await store.loadOnce(query('/other'), { fresh: true });
+      // The archived-view page stays unloaded for /work: no entry may be
+      // invented for it.
+
+      store.applySessionArchiveToggle('/work', { ...row }, { archived: true });
+
+      expect(
+        store.getSnapshot(query('/other')).page?.sessions[0],
+      ).toMatchObject({ sessionId: 'foreign' });
+      expect(store.getSnapshot(archivedView('/work')).page).toBeUndefined();
+    });
+  });
+
   it('overlays live state and clears volatile fields for persisted-only sessions', async () => {
     legacy.mockResolvedValue({
       sessions: [

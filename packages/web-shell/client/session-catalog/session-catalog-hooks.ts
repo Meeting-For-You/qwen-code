@@ -300,6 +300,15 @@ export function useSessionCatalogController(client: DaemonClient) {
           store.applySessionPinToggle(workspaceCwd, session, toggle),
         );
       },
+      toggleSessionArchived(
+        workspaceCwd: string,
+        session: DaemonSessionSummary,
+        toggle: { archived: boolean },
+      ) {
+        update(() =>
+          store.applySessionArchiveToggle(workspaceCwd, session, toggle),
+        );
+      },
       turnCompleted(workspaceCwd: string, sessionId: string) {
         update(() => {
           if (store.isWorkspaceLiveStateEnabled(workspaceCwd)) {
