@@ -135,6 +135,7 @@ function renderSection(
     sessionCatalogRequestsEnabled: boolean;
     sessionGroupCatalog: DaemonSessionGroupCatalog;
     sessionLiveStateEnabled: boolean;
+    hidden: boolean;
   }> = {},
 ): void {
   act(() => {
@@ -145,6 +146,7 @@ function renderSection(
           client={overrides.client ?? makeClient()}
           reloadToken={overrides.reloadToken ?? 0}
           expanded={overrides.expanded}
+          hidden={overrides.hidden}
           untrustedLabel="Untrusted"
           readOnlyLabel="Read-only"
           trustToOpenLabel="Trust to open"
@@ -220,6 +222,13 @@ describe('WorkspaceSection label', () => {
 
     expect(container.textContent).toContain('Payments API');
     expect(container.textContent).not.toContain('project');
+  });
+
+  it('renders nothing when hidden', () => {
+    renderSection({ hidden: true });
+
+    expect(container.textContent).toBe('');
+    expect(container.querySelector('button')).toBeNull();
   });
 
   it('shows read-only session details from row hover', async () => {
