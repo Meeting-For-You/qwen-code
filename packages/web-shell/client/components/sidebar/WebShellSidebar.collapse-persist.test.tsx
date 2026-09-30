@@ -229,6 +229,8 @@ function renderSidebar(
     footer?: false;
     sessionActions?: WebShellSidebarSessionActionsOptions;
     sessionGroupOverride?: SessionGroupOverride;
+    hideProjectHeader?: boolean;
+    hidePrimaryWorkspaceHeader?: boolean;
     strict?: boolean;
   } = {},
 ) {
@@ -251,6 +253,8 @@ function renderSidebar(
       onError={() => {}}
       sessionActions={props.sessionActions}
       sessionGroupOverride={props.sessionGroupOverride}
+      hideProjectHeader={props.hideProjectHeader}
+      hidePrimaryWorkspaceHeader={props.hidePrimaryWorkspaceHeader}
     />
   );
   act(() => {
@@ -1629,6 +1633,23 @@ describe('WebShellSidebar session group override', () => {
     expect(
       container.querySelector('section[aria-label="Topic B"]')?.textContent,
     ).toContain('Release notes');
+  });
+
+  it('lists groups at the sidebar root when the host hides the project and workspace rows', async () => {
+    renderSidebar(false, {
+      sessionGroupOverride: override,
+      hideProjectHeader: true,
+      hidePrimaryWorkspaceHeader: true,
+    });
+    await flushSidebar();
+
+    expect(sectionLabels()).toEqual(['Topic A', 'Topic B']);
+    expect(container.textContent).not.toContain('Projects');
+    expect(container.textContent).not.toContain('project');
+
+    // The project row owned the search entry point, so it stays reachable.
+    const search = container.querySelector<HTMLInputElement>('input');
+    expect(search?.placeholder).toBe('Search sessions');
   });
 
   it('puts unmapped sessions into a trailing Ungrouped section', async () => {

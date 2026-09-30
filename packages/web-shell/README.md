@@ -266,7 +266,7 @@ const sessionGroupOverride: SessionGroupOverride = {
 - 此时映射取代 Sidebar 自带的颜色分组和命名分组；置顶会话仍显示在顶部的置顶区域。「频道」标签页不受影响，继续按频道类型分组。
 - 未传、为空或没有命中任何会话时，Sidebar 与不传该属性时完全一致。
 - 传入稳定引用（如 `useMemo` 的结果），避免每次渲染重新分组。
-- 分组直接挂在 Sidebar 的「项目 / 工作区文件夹」之下。宿主不希望用户看到这两层时，配合 `sidebar={{ hideProjectHeader: true, hidePrimaryWorkspaceHeader: true }}`：前者隐藏「项目」标题行，后者隐藏主工作区的文件夹行，分组直接排在 Sidebar 根部。
+- 分组直接挂在 Sidebar 的「项目 / 工作区文件夹」之下。宿主不希望用户看到这两层时，配合 `sidebar={{ hideProjectHeader: true, hidePrimaryWorkspaceHeader: true }}`：前者隐藏「项目」标题行，后者隐藏主工作区的文件夹行，分组直接排在 Sidebar 根部，组内会话相对分组标题缩进；隐藏「项目」行后，会话搜索框改为常驻在会话列表顶部。
 
 锁定工作区时，可以自定义 Sidebar 文件夹行的内容：
 
