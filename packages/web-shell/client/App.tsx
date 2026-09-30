@@ -206,6 +206,7 @@ import {
   type WebShellSidebarSessionActionsOptions,
 } from './components/sidebar/WebShellSidebar';
 import { isSidebarToggleShortcut } from './components/sidebar/sidebarToggleShortcut';
+import type { SessionGroupOverride } from './components/sidebar/sessionGroupOverride';
 import { workspaceLabel } from './utils/workspace';
 import {
   getLocalCommands,
@@ -1062,6 +1063,16 @@ export interface WebShellProps {
    * capability to be satisfied.
    */
   newSessionSuggestionEnabled?: boolean;
+  /**
+   * Sidebar session grouping supplied by the host, as a `sessionId -> group`
+   * map. When it resolves at least one listed session, the sidebar groups the
+   * task list by these entries (sessions sharing an `id` share a section, in
+   * first-seen order; unmapped sessions land in a trailing "Ungrouped"
+   * section) instead of its own color/named groups. The channel tab keeps
+   * grouping by channel type. Omitted, empty, or matching no listed session,
+   * the sidebar renders exactly as it does without this prop.
+   */
+  sessionGroupOverride?: SessionGroupOverride;
   /** Built-in @ mention providers to enable. Defaults to all built-ins. */
   builtinAtProviders?: WebShellBuiltinAtProvidersConfig;
   /**
@@ -1963,6 +1974,7 @@ export function App({
   slashCommandCategoryOrder,
   onSlashCommand,
   newSessionSuggestionEnabled,
+  sessionGroupOverride,
   builtinAtProviders,
   atProviders,
   composerTagIcons,
@@ -12394,6 +12406,7 @@ export function App({
                   hideProjectHeader={sidebarOptions.hideProjectHeader}
                   sessionActions={sidebarOptions.sessionActions}
                   footer={sidebarOptions.footer}
+                  sessionGroupOverride={sessionGroupOverride}
                 />
               </div>
             )}

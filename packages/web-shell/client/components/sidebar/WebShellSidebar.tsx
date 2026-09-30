@@ -98,6 +98,10 @@ import { SessionGroupSection } from './SessionGroupSection';
 import { SessionDetailsTooltip } from './SessionDetailsTooltip';
 import { groupSessionsByChannelType } from './channelSessionGroups';
 import {
+  groupSessionsByOverride,
+  type SessionGroupOverride,
+} from './sessionGroupOverride';
+import {
   isPrimaryCollapsedSectionId,
   readCollapsedSessionSectionIds,
   replaceOwnedCollapsedSessionSectionIds,
@@ -400,6 +404,8 @@ interface WebShellSidebarProps {
   /** Customize which action buttons appear on session rows. */
   sessionActions?: WebShellSidebarSessionActionsOptions;
   footer?: false | WebShellSidebarFooterOptions;
+  /** Host-supplied session grouping; see `WebShellProps.sessionGroupOverride`. */
+  sessionGroupOverride?: SessionGroupOverride;
 }
 
 function cx(...classes: Array<string | false | undefined>): string {
@@ -850,6 +856,7 @@ export function WebShellSidebar({
   hideProjectHeader,
   sessionActions: sessionActionsOptions,
   footer,
+  sessionGroupOverride,
 }: WebShellSidebarProps) {
   const { t } = useI18n();
   const connection = useConnection();
@@ -3586,6 +3593,19 @@ export function WebShellSidebar({
     ],
   );
 
+  // The override describes task sessions, so the channel tab keeps grouping by
+  // channel type; everywhere else it replaces the built-in color/group
+  // sections.
+  const overrideSessionSections = useMemo(() => {
+    if (selectedSessionSource === 'channel') return null;
+    const sections = groupSessionsByOverride(
+      filteredSessions,
+      sessionGroupOverride,
+      t('sidebar.groupUngrouped'),
+    );
+    return sections.length > 0 ? sections : null;
+  }, [filteredSessions, selectedSessionSource, sessionGroupOverride, t]);
+
   const sessionSections = useMemo<SessionSection[]>(() => {
     if (!organizationEnabled) return [];
     const searching = searchQuery.trim().length > 0;
@@ -3660,6 +3680,10 @@ export function WebShellSidebar({
   }, [filteredSessions, groups, organizationEnabled, searchQuery, t]);
 
   useEffect(() => {
+    // Host-driven sections skip the collapse bookkeeping: a group that appears
+    // mid-session (say, after the first chat of a new topic) would otherwise
+    // start collapsed and hide the session the user just opened.
+    if (overrideSessionSections) return;
     const activeSections = channelSessionSections ?? sessionSections;
     if (selectedSessionSource === 'channel') {
       if (!channelCatalogLoaded) return;
@@ -3700,6 +3724,7 @@ export function WebShellSidebar({
     channelCatalogLoaded,
     channelSessionSections,
     organizationEnabled,
+    overrideSessionSections,
     searchQuery,
     selectedSessionSource,
     sessionSections,
@@ -4461,8 +4486,9 @@ export function WebShellSidebar({
     ) {
       return <div className={styles.notice}>{t('sidebar.noSessions')}</div>;
     }
-    if (channelSessionSections) {
-      return channelSessionSections.map((section) => (
+    const sectionedSessions = channelSessionSections ?? overrideSessionSections;
+    if (sectionedSessions) {
+      return sectionedSessions.map((section) => (
         <SessionGroupSection
           key={section.id}
           id={section.id}
@@ -4528,6 +4554,7 @@ export function WebShellSidebar({
     handleDeleteGroup,
     handleRenameGroup,
     organizationEnabled,
+    overrideSessionSections,
     reload,
     renderSessionRow,
     searchQuery,
@@ -5249,6 +5276,7 @@ export function WebShellSidebar({
                 }
                 sourceType={sourceMetadataEnabled ? 'default' : undefined}
                 channelGroupingEnabled={false}
+                sessionGroupOverride={sessionGroupOverride}
                 ungroupedLabel={t('sidebar.groupUngrouped')}
                 excludePinned={selectedSessionSource !== 'channel'}
                 mapSession={applyOptimisticPin}
@@ -5366,6 +5394,7 @@ export function WebShellSidebar({
                           }
                           sourceType={selectedSessionSource}
                           channelGroupingEnabled={channelGroupingEnabled}
+                          sessionGroupOverride={sessionGroupOverride}
                           ungroupedLabel={t('sidebar.groupUngrouped')}
                           onRenameGroup={
                             canOrganizeWorkspace(ws.cwd)

@@ -42,6 +42,10 @@ import { SessionDetailsTooltip } from './SessionDetailsTooltip';
 import { sessionMatchesGitQuery } from './sessionSearch';
 import { measureSessionTitleScroll } from './sessionTitleScroll';
 import { groupSessionsByChannelType } from './channelSessionGroups';
+import {
+  groupSessionsByOverride,
+  type SessionGroupOverride,
+} from './sessionGroupOverride';
 import styles from './WorkspaceSection.module.css';
 import sidebarStyles from './WebShellSidebar.module.css';
 import { useSessionCatalogQuery } from '../../session-catalog/session-catalog-hooks';
@@ -94,6 +98,11 @@ interface WorkspaceSectionProps {
   sessionLiveStateEnabled?: boolean;
   sourceType?: string;
   channelGroupingEnabled?: boolean;
+  /**
+   * Host-supplied grouping that replaces the daemon session groups. Ignored
+   * while channel grouping is on: channel sessions group by channel type.
+   */
+  sessionGroupOverride?: SessionGroupOverride;
   ungroupedLabel: string;
   searchQuery?: string;
   expanded?: boolean;
@@ -142,6 +151,7 @@ export function WorkspaceSection({
   sessionLiveStateEnabled = false,
   sourceType,
   channelGroupingEnabled = false,
+  sessionGroupOverride,
   ungroupedLabel,
   searchQuery = '',
   expanded: controlledExpanded,
@@ -481,6 +491,22 @@ export function WorkspaceSection({
     [channelCatalog, channelGroupingEnabled, t, visibleSessions],
   );
 
+  const overrideSessionGroups = useMemo(() => {
+    if (channelGroupingEnabled) return null;
+    const sections = groupSessionsByOverride(
+      visibleSessions,
+      sessionGroupOverride,
+      ungroupedLabel,
+    );
+    return sections.length > 0 ? sections : null;
+  }, [
+    channelGroupingEnabled,
+    sessionGroupOverride,
+    ungroupedLabel,
+    visibleSessions,
+  ]);
+  const sectionedSessionGroups = channelSessionGroups ?? overrideSessionGroups;
+
   const toggleExpanded = () => {
     if (disabled) return;
     const nextExpanded = !expanded;
@@ -576,9 +602,9 @@ export function WorkspaceSection({
               sessionsLoading && sessionsPage === undefined ? null : (
                 <div className={styles.empty}>{noSessionsLabel}</div>
               )
-            ) : channelSessionGroups ? (
+            ) : sectionedSessionGroups ? (
               <>
-                {channelSessionGroups.map((group) => (
+                {sectionedSessionGroups.map((group) => (
                   <SessionGroupSection
                     id={group.id}
                     key={group.id}

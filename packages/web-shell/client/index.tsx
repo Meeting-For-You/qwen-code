@@ -141,6 +141,10 @@ export type {
   BugReportInfo,
   SessionChangeEvent,
 } from './App';
+export type {
+  SessionGroupOverride,
+  SessionGroupOverrideEntry,
+} from './components/sidebar/sessionGroupOverride';
 export type { WebShellShadowDom, WebShellShadowDomOptions } from './shadowDom';
 export type { ToastTone } from './components/ToastHost';
 export type {
