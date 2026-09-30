@@ -220,15 +220,16 @@ const projection = projectChatRecordsToDaemonTranscript(records);
 
 ### WebShell
 
-| 属性                | 类型                                                                                    | 说明                                                                             |
-| ------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `onSessionIdChange` | `(sessionId: string \| undefined, workspaceId?: string, workspaceCwd?: string) => void` | 当前 session 或工作区变化时触发                                                  |
-| `onSessionCreated`  | `(sessionId: string) => Promise<void> \| void`                                          | 新 session 创建后触发；完成前会阻塞 session 初始化和 prompt 提交，最长等待 30 秒 |
-| `theme`             | `'dark' \| 'light'`                                                                     | UI 主题，默认 `dark`                                                             |
-| `onThemeChange`     | `(theme: WebShellTheme) => void`                                                        | `/theme` 命令切换主题后触发                                                      |
-| `language`          | `'en' \| 'zh-CN' \| 'zh' \| 'zh-cn'`                                                    | UI 语言                                                                          |
-| `onLanguageChange`  | `(language: WebShellLanguage) => void`                                                  | `/language ui` 切换 UI 语言后触发                                                |
-| `onSlashCommand`    | `(command: WebShellSlashCommand) => boolean \| void`                                    | 斜杠命令进入默认处理前触发；返回 `true` 时由宿主接管并跳过默认行为               |
+| 属性                   | 类型                                                                                    | 说明                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `onSessionIdChange`    | `(sessionId: string \| undefined, workspaceId?: string, workspaceCwd?: string) => void` | 当前 session 或工作区变化时触发                                                     |
+| `onSessionCreated`     | `(sessionId: string) => Promise<void> \| void`                                          | 新 session 创建后触发；完成前会阻塞 session 初始化和 prompt 提交，最长等待 30 秒    |
+| `theme`                | `'dark' \| 'light'`                                                                     | UI 主题，默认 `dark`                                                                |
+| `onThemeChange`        | `(theme: WebShellTheme) => void`                                                        | `/theme` 命令切换主题后触发                                                         |
+| `language`             | `'en' \| 'zh-CN' \| 'zh' \| 'zh-cn'`                                                    | UI 语言                                                                             |
+| `onLanguageChange`     | `(language: WebShellLanguage) => void`                                                  | `/language ui` 切换 UI 语言后触发                                                   |
+| `onSlashCommand`       | `(command: WebShellSlashCommand) => boolean \| void`                                    | 斜杠命令进入默认处理前触发；返回 `true` 时由宿主接管并跳过默认行为                  |
+| `sessionGroupOverride` | `SessionGroupOverride`                                                                  | 由宿主提供的 `sessionId -> { id, label }` 映射，用于分组 Sidebar 的会话列表，见下文 |
 
 宿主可以监听命令，也可以返回 `true` 接管对应操作：
 
@@ -245,6 +246,26 @@ const projection = projectChatRecordsToDaemonTranscript(records);
 回调在主聊天和分屏聊天中都会触发，也可以在 daemon 断连时处理纯宿主操作。
 命令名后必须是空白或输入结束，因此 `/usr/local/bin/tool` 等绝对路径不会触发
 回调。如果回调抛出异常，Web Shell 会报告错误并继续执行默认命令流程。
+
+宿主可以传入 `sessionGroupOverride`，让 Sidebar 按自己的维度分组会话列表。类型
+`SessionGroupOverride`（以及单项的 `SessionGroupOverrideEntry`）从包入口导出：
+
+```tsx
+import type { SessionGroupOverride } from '@qwen-code/web-shell';
+
+const sessionGroupOverride: SessionGroupOverride = {
+  'session-1': { id: 'topic-a', label: 'Topic A' },
+  'session-2': { id: 'topic-a', label: 'Topic A' },
+  'session-3': { id: 'topic-b', label: 'Topic B' },
+};
+
+<WebShellWithProviders sessionGroupOverride={sessionGroupOverride} />;
+```
+
+- 映射命中当前列表中至少一个会话时，任务列表按 `id` 分组：同一 `id` 的会话共用一个分组，`label` 取该组首个命中会话的值；分组按会话首次出现的顺序排列，组内保持原有顺序、hover 操作与归档等交互；未命中映射的会话归入末尾的「未分组」。
+- 此时映射取代 Sidebar 自带的颜色分组和命名分组；置顶会话仍显示在顶部的置顶区域。「频道」标签页不受影响，继续按频道类型分组。
+- 未传、为空或没有命中任何会话时，Sidebar 与不传该属性时完全一致。
+- 传入稳定引用（如 `useMemo` 的结果），避免每次渲染重新分组。
 
 锁定工作区时，可以自定义 Sidebar 文件夹行的内容：
 

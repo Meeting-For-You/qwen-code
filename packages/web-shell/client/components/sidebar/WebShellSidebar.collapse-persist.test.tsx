@@ -5,6 +5,7 @@ import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { DaemonSessionSummary } from '@qwen-code/sdk/daemon';
 import type { WebShellSidebarSessionActionsOptions } from './WebShellSidebar';
+import type { SessionGroupOverride } from './sessionGroupOverride';
 import sidebarStyles from './WebShellSidebar.module.css';
 
 const { connection, workspace, workspaceActions, active, pinned, archived } =
@@ -227,6 +228,7 @@ function renderSidebar(
     onMobileClose?: () => void;
     footer?: false;
     sessionActions?: WebShellSidebarSessionActionsOptions;
+    sessionGroupOverride?: SessionGroupOverride;
     strict?: boolean;
   } = {},
 ) {
@@ -248,6 +250,7 @@ function renderSidebar(
       footer={props.footer}
       onError={() => {}}
       sessionActions={props.sessionActions}
+      sessionGroupOverride={props.sessionGroupOverride}
     />
   );
   act(() => {
@@ -1600,5 +1603,128 @@ describe('WebShellSidebar collapsed session group persistence', () => {
         'input[aria-label="Rename: API review"]',
       ),
     ).not.toBeNull();
+  });
+});
+
+describe('WebShellSidebar session group override', () => {
+  const override: SessionGroupOverride = {
+    'session-a': { id: 'topic-a', label: 'Topic A' },
+    'session-b': { id: 'topic-b', label: 'Topic B' },
+  };
+
+  function sectionLabels(): string[] {
+    return Array.from(container.querySelectorAll('section')).map(
+      (section) => section.getAttribute('aria-label') ?? '',
+    );
+  }
+
+  it('groups the session list by the host mapping instead of daemon groups', async () => {
+    renderSidebar(false, { sessionGroupOverride: override });
+    await flushSidebar();
+
+    expect(sectionLabels()).toEqual(['Topic A', 'Topic B']);
+    expect(
+      container.querySelector('section[aria-label="Topic A"]')?.textContent,
+    ).toContain('API review');
+    expect(
+      container.querySelector('section[aria-label="Topic B"]')?.textContent,
+    ).toContain('Release notes');
+  });
+
+  it('puts unmapped sessions into a trailing Ungrouped section', async () => {
+    active.sessions = [
+      ...active.sessions,
+      makeSession('session-c', { displayName: 'Scratch pad' }),
+    ];
+    active.data = active.sessions;
+    renderSidebar(false, { sessionGroupOverride: override });
+    await flushSidebar();
+
+    expect(sectionLabels()).toEqual(['Topic A', 'Topic B', 'Ungrouped']);
+    expect(
+      container.querySelector('section[aria-label="Ungrouped"]')?.textContent,
+    ).toContain('Scratch pad');
+  });
+
+  it('renders like the built-in list when the mapping is empty or unmatched', async () => {
+    for (const sessionGroupOverride of [
+      undefined,
+      {},
+      { 'unknown-session': { id: 'topic-a', label: 'Topic A' } },
+    ]) {
+      renderSidebar(false, { sessionGroupOverride });
+      await flushSidebar();
+
+      expect(sectionLabels()).toEqual(['Backend', 'Ungrouped']);
+    }
+  });
+
+  it('keeps host groups that arrive after the first catalog expanded', async () => {
+    // The mapping usually lands after the session list: the built-in sections
+    // register first, so host groups look like brand-new mid-session sections.
+    renderSidebar();
+    await flushSidebar();
+    expect(sectionLabels()).toEqual(['Backend', 'Ungrouped']);
+
+    // Keep the same React root so the first-catalog latch stays flipped.
+    renderSidebar(false, { sessionGroupOverride: override });
+    await flushSidebar();
+
+    expect(sectionLabels()).toEqual(['Topic A', 'Topic B']);
+    expect(groupHeader('Topic A').getAttribute('aria-expanded')).toBe('true');
+    expect(groupHeader('Topic B').getAttribute('aria-expanded')).toBe('true');
+    expect(
+      container.querySelector('section[aria-label="Topic A"]')?.textContent,
+    ).toContain('API review');
+  });
+
+  it('persists a collapsed host group under its own section id', async () => {
+    renderSidebar(false, { sessionGroupOverride: override });
+    await flushSidebar();
+
+    act(() => click(groupHeader('Topic A')));
+    await flushSidebar();
+
+    expect(groupHeader('Topic A').getAttribute('aria-expanded')).toBe('false');
+    expect(
+      window.localStorage.getItem(COLLAPSED_SESSION_SECTIONS_STORAGE_KEY),
+    ).toBe(JSON.stringify(['session-group-override:topic-a']));
+  });
+
+  it('leaves the channel tab ungrouped by the host mapping', async () => {
+    const capabilities = {
+      ...organizationCapabilities,
+      features: [
+        ...organizationCapabilities.features,
+        'session_source_metadata',
+      ],
+    };
+    connection.capabilities = capabilities;
+    workspace.capabilities = capabilities;
+    active.sessions = [
+      makeSession('session-a', {
+        displayName: 'DingTalk chat',
+        sourceType: 'channel',
+      }),
+    ];
+    active.data = active.sessions;
+    renderSidebar(false, { sessionGroupOverride: override });
+    await flushSidebar();
+    expect(container.textContent).not.toContain('DingTalk chat');
+
+    const channelsTab = Array.from(
+      container.querySelectorAll<HTMLElement>('[role="tab"]'),
+    ).find((tab) => tab.textContent?.includes('Channels'));
+    expect(channelsTab).toBeDefined();
+    act(() => {
+      channelsTab!.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, button: 0 }),
+      );
+      channelsTab!.click();
+    });
+    await flushSidebar();
+
+    expect(container.textContent).toContain('DingTalk chat');
+    expect(container.querySelector('section[aria-label="Topic A"]')).toBeNull();
   });
 });

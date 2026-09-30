@@ -11,6 +11,7 @@ import type {
   DaemonWorkspaceGitStatus,
 } from '@qwen-code/sdk/daemon';
 import gitStyles from '../ChatEditor.module.css';
+import type { SessionGroupOverride } from './sessionGroupOverride';
 
 const {
   workspaceGit,
@@ -129,6 +130,7 @@ function renderSection(
     expanded: boolean;
     sourceType: string;
     channelGroupingEnabled: boolean;
+    sessionGroupOverride: SessionGroupOverride;
     organizationEnabled: boolean;
     sessionCatalogRequestsEnabled: boolean;
     sessionGroupCatalog: DaemonSessionGroupCatalog;
@@ -156,6 +158,7 @@ function renderSection(
           sessionLiveStateEnabled={overrides.sessionLiveStateEnabled}
           sourceType={overrides.sourceType}
           channelGroupingEnabled={overrides.channelGroupingEnabled}
+          sessionGroupOverride={overrides.sessionGroupOverride}
           ungroupedLabel="Ungrouped"
           renderSession={(session: DaemonSessionSummary): ReactNode => (
             <div key={session.sessionId}>{session.displayName}</div>
@@ -948,6 +951,165 @@ describe('WorkspaceSection session loading', () => {
     await flush();
 
     expect(listWorkspaceSessionsPage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WorkspaceSection session group override', () => {
+  const daemonGroup = {
+    id: 'daemon-group',
+    name: 'Daemon group',
+    color: 'blue',
+    order: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  const override: SessionGroupOverride = {
+    'session-1': { id: 'alpha', label: 'Alpha' },
+    'session-2': { id: 'beta', label: 'Beta' },
+    'session-3': { id: 'alpha', label: 'Alpha' },
+  };
+
+  function makeGroupingClient(): DaemonClient {
+    return {
+      workspaceByCwd: vi.fn(() => ({
+        workspaceGit,
+        listWorkspaceSessionsPage: vi.fn().mockResolvedValue({
+          sessions: [
+            {
+              sessionId: 'session-1',
+              displayName: 'Session 1',
+              groupId: 'daemon-group',
+            },
+            { sessionId: 'session-2', displayName: 'Session 2' },
+            { sessionId: 'session-3', displayName: 'Session 3' },
+            { sessionId: 'session-4', displayName: 'Session 4' },
+          ],
+        }),
+        listSessionGroups: vi.fn().mockResolvedValue({ groups: [daemonGroup] }),
+      })),
+    } as unknown as DaemonClient;
+  }
+
+  function sectionLabels(): string[] {
+    return Array.from(container.querySelectorAll('section')).map(
+      (section) => section.getAttribute('aria-label') ?? '',
+    );
+  }
+
+  it('groups sessions by the host mapping and pins unmapped ones last', async () => {
+    renderSection({
+      workspace: { ...trustedWorkspace, primary: false },
+      client: makeGroupingClient(),
+      expanded: true,
+      sessionGroupOverride: override,
+    });
+    await flush();
+
+    expect(sectionLabels()).toEqual(['Alpha', 'Beta', 'Ungrouped']);
+    expect(
+      container.querySelector('section[aria-label="Alpha"]')?.textContent,
+    ).toContain('Session 1');
+    expect(
+      container.querySelector('section[aria-label="Alpha"]')?.textContent,
+    ).toContain('Session 3');
+    expect(
+      container.querySelector('section[aria-label="Ungrouped"]')?.textContent,
+    ).toContain('Session 4');
+  });
+
+  it('replaces the daemon session groups when the mapping applies', async () => {
+    renderSection({
+      workspace: { ...trustedWorkspace, primary: false },
+      client: makeGroupingClient(),
+      expanded: true,
+      organizationEnabled: true,
+      sessionGroupOverride: override,
+    });
+    await flush();
+
+    expect(sectionLabels()).toEqual(['Alpha', 'Beta', 'Ungrouped']);
+  });
+
+  it('renders the built-in list when the mapping is missing, empty or unmatched', async () => {
+    for (const sessionGroupOverride of [
+      undefined,
+      {},
+      { 'other-session': { id: 'alpha', label: 'Alpha' } },
+    ]) {
+      renderSection({
+        workspace: { ...trustedWorkspace, primary: false },
+        client: makeGroupingClient(),
+        expanded: true,
+        sessionGroupOverride,
+      });
+      await flush();
+
+      expect(sectionLabels()).toEqual([]);
+      expect(container.textContent).toContain('Session 4');
+    }
+  });
+
+  it('keeps daemon session groups when the mapping is absent', async () => {
+    renderSection({
+      workspace: { ...trustedWorkspace, primary: false },
+      client: makeGroupingClient(),
+      expanded: true,
+      organizationEnabled: true,
+    });
+    await flush();
+
+    expect(sectionLabels()).toEqual(['Daemon group', 'Ungrouped']);
+  });
+
+  it('lets channel grouping win over the mapping', async () => {
+    const client = {
+      workspaceByCwd: vi.fn(() => ({
+        workspaceGit,
+        listWorkspaceSessionsPage: vi.fn().mockResolvedValue({
+          sessions: [
+            {
+              sessionId: 'session-1',
+              displayName: 'DingTalk session',
+              sourceType: 'channel',
+              sourceId: 'ding-one',
+            },
+          ],
+        }),
+        listSessionGroups: vi.fn().mockResolvedValue({ groups: [] }),
+        workspaceChannelTypes: vi.fn().mockResolvedValue([
+          {
+            type: 'dingtalk',
+            displayName: 'DingTalk',
+            manageable: true,
+            fields: [],
+          },
+        ]),
+        workspaceChannels: vi.fn().mockResolvedValue({
+          revision: '1',
+          instances: {
+            'ding-one': {
+              name: 'ding-one',
+              config: { type: 'dingtalk' },
+              secrets: {},
+              startsWithServe: false,
+              runtime: { state: 'connected' },
+            },
+          },
+        }),
+      })),
+    } as unknown as DaemonClient;
+
+    renderSection({
+      workspace: { ...trustedWorkspace, primary: false },
+      client,
+      expanded: true,
+      sourceType: 'channel',
+      channelGroupingEnabled: true,
+      sessionGroupOverride: override,
+    });
+    await flush();
+
+    expect(sectionLabels()).toEqual(['DingTalk']);
   });
 });
 
