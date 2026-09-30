@@ -673,6 +673,16 @@
   gap: 2px;
 }
 
+/* Nest session rows under their group header so the hierarchy is visible. */
+.sessionGroupList > .sessionRow,
+.sessionGroupList > * > .sessionRow {
+  padding-left: 48px;
+}
+
+.sessionGroupList > .showAllSessions {
+  margin-left: 48px;
+}
+
 .showAllSessions {
   align-self: flex-start;
   margin-left: 26px;

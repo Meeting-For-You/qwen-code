@@ -5340,14 +5340,14 @@ export function WebShellSidebar({
                 </div>
               </div>
             )}
-            {searchOpen && !hideProjectHeader && (
+            {(hideProjectHeader || searchOpen) && (
               <div className={styles.projectSearch}>
                 <SearchIcon aria-hidden="true" />
                 <Input
                   value={searchQuery}
                   placeholder={t('sidebar.searchPlaceholder')}
                   aria-label={t('sidebar.search')}
-                  autoFocus
+                  autoFocus={!hideProjectHeader}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Escape') {
