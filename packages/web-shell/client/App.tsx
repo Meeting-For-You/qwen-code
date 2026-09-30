@@ -915,6 +915,12 @@ export interface WebShellSidebarOptions {
   primaryNav?: WebShellSidebarPrimaryNavOptions;
   /** Whether to hide the "Projects" header row (with search and add workspace). Defaults to false (shown). */
   hideProjectHeader?: boolean;
+  /**
+   * Whether to hide the primary workspace's folder row and list its sessions (or
+   * `sessionGroupOverride` groups) directly under the sidebar root. Defaults to
+   * false (shown).
+   */
+  hidePrimaryWorkspaceHeader?: boolean;
   /** Customize which action buttons appear on session rows. */
   sessionActions?: WebShellSidebarSessionActionsOptions;
   /** Hide the footer completely or select the built-in entries it exposes. */
@@ -1268,6 +1274,7 @@ function resolveSidebarOptions(sidebar: WebShellProps['sidebar']): {
   branding?: false | WebShellSidebarBranding;
   primaryNav?: WebShellSidebarPrimaryNavOptions;
   hideProjectHeader?: boolean;
+  hidePrimaryWorkspaceHeader?: boolean;
   sessionActions?: WebShellSidebarSessionActionsOptions;
   footer?: false | WebShellSidebarFooterOptions;
   lockedWorkspace?: WebShellSidebarLockedWorkspace;
@@ -1285,6 +1292,7 @@ function resolveSidebarOptions(sidebar: WebShellProps['sidebar']): {
     branding: sidebar.branding,
     primaryNav: sidebar.primaryNav,
     hideProjectHeader: sidebar.hideProjectHeader,
+    hidePrimaryWorkspaceHeader: sidebar.hidePrimaryWorkspaceHeader,
     sessionActions: sidebar.sessionActions,
     footer: sidebar.footer,
     lockedWorkspace: sidebar.lockedWorkspace,
@@ -12404,6 +12412,9 @@ export function App({
                   branding={sidebarOptions.branding}
                   primaryNav={sidebarOptions.primaryNav}
                   hideProjectHeader={sidebarOptions.hideProjectHeader}
+                  hidePrimaryWorkspaceHeader={
+                    sidebarOptions.hidePrimaryWorkspaceHeader
+                  }
                   sessionActions={sidebarOptions.sessionActions}
                   footer={sidebarOptions.footer}
                   sessionGroupOverride={sessionGroupOverride}

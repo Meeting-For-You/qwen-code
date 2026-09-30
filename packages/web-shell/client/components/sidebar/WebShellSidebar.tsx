@@ -401,6 +401,8 @@ interface WebShellSidebarProps {
   primaryNav?: WebShellSidebarPrimaryNavOptions;
   /** Whether to hide the "Projects" header row (with search and add workspace). Defaults to false (shown). */
   hideProjectHeader?: boolean;
+  /** Whether to hide the primary workspace's folder row. Defaults to false (shown). */
+  hidePrimaryWorkspaceHeader?: boolean;
   /** Customize which action buttons appear on session rows. */
   sessionActions?: WebShellSidebarSessionActionsOptions;
   footer?: false | WebShellSidebarFooterOptions;
@@ -854,6 +856,7 @@ export function WebShellSidebar({
   branding,
   primaryNav: primaryNavOptions,
   hideProjectHeader,
+  hidePrimaryWorkspaceHeader,
   sessionActions: sessionActionsOptions,
   footer,
   sessionGroupOverride,
@@ -5363,6 +5366,7 @@ export function WebShellSidebar({
                       <Fragment key={ws.id}>
                         <WorkspaceSection
                           workspace={ws}
+                          hidden={ws.primary && hidePrimaryWorkspaceHeader}
                           renderHeader={
                             lockedWorkspaceCwd && lockedWorkspaceOptions?.render
                               ? (expanded) =>
@@ -5554,7 +5558,9 @@ export function WebShellSidebar({
                           }}
                         />
                         {ws.primary &&
-                        (projectExpanded || searchQuery.trim()) ? (
+                        (hidePrimaryWorkspaceHeader ||
+                          projectExpanded ||
+                          searchQuery.trim()) ? (
                           <div className={styles.workspaceSessionBody}>
                             {body}
                           </div>

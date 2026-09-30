@@ -109,6 +109,8 @@ interface WorkspaceSectionProps {
   autoExpandKey?: string;
   onExpandedChange?: (expanded: boolean) => void;
   renderSessions?: boolean;
+  /** Render nothing at all, e.g. when the host hides the primary workspace row. */
+  hidden?: boolean;
   /**
    * Render one session row. The sidebar passes its shared `renderSessionRow`
    * so per-workspace sessions match the single-workspace list exactly — same
@@ -158,6 +160,7 @@ export function WorkspaceSection({
   autoExpandKey,
   onExpandedChange,
   renderSessions = true,
+  hidden = false,
   renderSession,
   mapSession,
   showSessionDetails = true,
@@ -516,6 +519,8 @@ export function WorkspaceSection({
     }
     onExpandedChange?.(nextExpanded);
   };
+
+  if (hidden) return null;
 
   return (
     <div className={styles.section}>
