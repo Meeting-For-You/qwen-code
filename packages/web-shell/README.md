@@ -268,6 +268,9 @@ const sessionGroupOverride: SessionGroupOverride = {
 - 传入稳定引用（如 `useMemo` 的结果），避免每次渲染重新分组。
 - 分组直接挂在 Sidebar 的「项目 / 工作区文件夹」之下。宿主不希望用户看到这两层时，配合 `sidebar={{ hideProjectHeader: true, hidePrimaryWorkspaceHeader: true }}`：前者隐藏「项目」标题行，后者隐藏主工作区的文件夹行，分组直接排在 Sidebar 根部，组内会话相对分组标题缩进；隐藏「项目」行后，会话搜索框改为常驻在会话列表顶部。
 
+`sidebar.hideSessionSourceTabs` 隐藏会话列表上方的「任务 / 频道」来源标签页，只保留任务会话。
+`sidebar.branding.render` 会收到 `{ collapsed }`，宿主可据此在侧边栏收起时只渲染 logo。
+
 锁定工作区时，可以自定义 Sidebar 文件夹行的内容：
 
 ```tsx

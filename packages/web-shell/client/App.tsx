@@ -921,6 +921,8 @@ export interface WebShellSidebarOptions {
    * false (shown).
    */
   hidePrimaryWorkspaceHeader?: boolean;
+  /** Whether to hide the Tasks / Channels source tabs above the session list. Defaults to false (shown). */
+  hideSessionSourceTabs?: boolean;
   /** Customize which action buttons appear on session rows. */
   sessionActions?: WebShellSidebarSessionActionsOptions;
   /** Hide the footer completely or select the built-in entries it exposes. */
@@ -1275,6 +1277,7 @@ function resolveSidebarOptions(sidebar: WebShellProps['sidebar']): {
   primaryNav?: WebShellSidebarPrimaryNavOptions;
   hideProjectHeader?: boolean;
   hidePrimaryWorkspaceHeader?: boolean;
+  hideSessionSourceTabs?: boolean;
   sessionActions?: WebShellSidebarSessionActionsOptions;
   footer?: false | WebShellSidebarFooterOptions;
   lockedWorkspace?: WebShellSidebarLockedWorkspace;
@@ -1293,6 +1296,7 @@ function resolveSidebarOptions(sidebar: WebShellProps['sidebar']): {
     primaryNav: sidebar.primaryNav,
     hideProjectHeader: sidebar.hideProjectHeader,
     hidePrimaryWorkspaceHeader: sidebar.hidePrimaryWorkspaceHeader,
+    hideSessionSourceTabs: sidebar.hideSessionSourceTabs,
     sessionActions: sidebar.sessionActions,
     footer: sidebar.footer,
     lockedWorkspace: sidebar.lockedWorkspace,
@@ -12415,6 +12419,7 @@ export function App({
                   hidePrimaryWorkspaceHeader={
                     sidebarOptions.hidePrimaryWorkspaceHeader
                   }
+                  hideSessionSourceTabs={sidebarOptions.hideSessionSourceTabs}
                   sessionActions={sidebarOptions.sessionActions}
                   footer={sidebarOptions.footer}
                   sessionGroupOverride={sessionGroupOverride}

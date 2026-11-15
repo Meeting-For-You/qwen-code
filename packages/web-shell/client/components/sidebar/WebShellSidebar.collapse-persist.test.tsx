@@ -4,7 +4,10 @@ import * as React from 'react';
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { DaemonSessionSummary } from '@qwen-code/sdk/daemon';
-import type { WebShellSidebarSessionActionsOptions } from './WebShellSidebar';
+import type {
+  WebShellSidebarBranding,
+  WebShellSidebarSessionActionsOptions,
+} from './WebShellSidebar';
 import type { SessionGroupOverride } from './sessionGroupOverride';
 import sidebarStyles from './WebShellSidebar.module.css';
 
@@ -231,6 +234,8 @@ function renderSidebar(
     sessionGroupOverride?: SessionGroupOverride;
     hideProjectHeader?: boolean;
     hidePrimaryWorkspaceHeader?: boolean;
+    hideSessionSourceTabs?: boolean;
+    branding?: WebShellSidebarBranding;
     strict?: boolean;
   } = {},
 ) {
@@ -255,6 +260,8 @@ function renderSidebar(
       sessionGroupOverride={props.sessionGroupOverride}
       hideProjectHeader={props.hideProjectHeader}
       hidePrimaryWorkspaceHeader={props.hidePrimaryWorkspaceHeader}
+      hideSessionSourceTabs={props.hideSessionSourceTabs}
+      branding={props.branding}
     />
   );
   act(() => {
@@ -1747,5 +1754,83 @@ describe('WebShellSidebar session group override', () => {
 
     expect(container.textContent).toContain('DingTalk chat');
     expect(container.querySelector('section[aria-label="Topic A"]')).toBeNull();
+  });
+});
+
+describe('WebShellSidebar session source tabs', () => {
+  it('hides the Tasks / Channels source tabs when the host asks', async () => {
+    const capabilities = {
+      ...organizationCapabilities,
+      features: [
+        ...organizationCapabilities.features,
+        'session_source_metadata',
+      ],
+    };
+    connection.capabilities = capabilities;
+    workspace.capabilities = capabilities;
+    renderSidebar(false);
+    await flushSidebar();
+    expect(container.querySelectorAll('[role="tab"]').length).toBe(2);
+
+    renderSidebar(false, { hideSessionSourceTabs: true });
+    await flushSidebar();
+    expect(container.querySelectorAll('[role="tab"]').length).toBe(0);
+  });
+});
+
+describe('WebShellSidebar hidden source tabs while on Channels', () => {
+  it('returns to the Tasks list when the tabs are hidden', async () => {
+    const capabilities = {
+      ...organizationCapabilities,
+      features: [
+        ...organizationCapabilities.features,
+        'session_source_metadata',
+      ],
+    };
+    connection.capabilities = capabilities;
+    workspace.capabilities = capabilities;
+    active.sessions = [
+      makeSession('task-1', { displayName: 'Task chat' }),
+      makeSession('channel-1', {
+        displayName: 'DingTalk chat',
+        sourceType: 'channel',
+      }),
+    ];
+    active.data = active.sessions;
+    renderSidebar(false);
+    await flushSidebar();
+    const channelsTab = Array.from(
+      container.querySelectorAll<HTMLElement>('[role="tab"]'),
+    ).find((tab) => tab.textContent?.includes('Channels'));
+    act(() => {
+      channelsTab!.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, button: 0 }),
+      );
+      channelsTab!.click();
+    });
+    await flushSidebar();
+    expect(container.textContent).toContain('DingTalk chat');
+
+    renderSidebar(false, { hideSessionSourceTabs: true });
+    await flushSidebar();
+    expect(container.querySelectorAll('[role="tab"]').length).toBe(0);
+    expect(container.textContent).toContain('Task chat');
+    expect(container.textContent).not.toContain('DingTalk chat');
+  });
+});
+
+describe('WebShellSidebar custom branding', () => {
+  it('tells the host whether the sidebar is collapsed', async () => {
+    const render = vi.fn(({ collapsed }: { collapsed: boolean }) => (
+      <span data-testid="host-brand">{collapsed ? 'short' : 'long'}</span>
+    ));
+    renderSidebar(false, { branding: { render } });
+    await flushSidebar();
+    expect(container.textContent).toContain('long');
+
+    renderSidebar(true, { branding: { render } });
+    await flushSidebar();
+    expect(container.textContent).toContain('short');
+    expect(render).toHaveBeenCalledWith({ collapsed: true });
   });
 });
