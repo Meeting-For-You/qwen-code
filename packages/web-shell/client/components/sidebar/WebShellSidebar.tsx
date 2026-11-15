@@ -205,8 +205,11 @@ export type WebShellSidebarFooterItem =
   | 'collapse';
 
 export interface WebShellSidebarBranding {
-  /** Replace the complete top branding row. */
-  render?: () => ReactNode;
+  /**
+   * Replace the complete top branding row. `collapsed` is true while the
+   * desktop sidebar is collapsed to its icon rail.
+   */
+  render?: (state: { collapsed: boolean }) => ReactNode;
   /** Hide the branding row in the compact drawer. Defaults to true. */
   hideWhenCompact?: boolean;
 }
@@ -403,6 +406,8 @@ interface WebShellSidebarProps {
   hideProjectHeader?: boolean;
   /** Whether to hide the primary workspace's folder row. Defaults to false (shown). */
   hidePrimaryWorkspaceHeader?: boolean;
+  /** Whether to hide the Tasks / Channels source tabs above the session list. Defaults to false (shown). */
+  hideSessionSourceTabs?: boolean;
   /** Customize which action buttons appear on session rows. */
   sessionActions?: WebShellSidebarSessionActionsOptions;
   footer?: false | WebShellSidebarFooterOptions;
@@ -857,6 +862,7 @@ export function WebShellSidebar({
   primaryNav: primaryNavOptions,
   hideProjectHeader,
   hidePrimaryWorkspaceHeader,
+  hideSessionSourceTabs,
   sessionActions: sessionActionsOptions,
   footer,
   sessionGroupOverride,
@@ -903,8 +909,12 @@ export function WebShellSidebar({
   const sourceMetadataEnabled = Boolean(
     connection.capabilities?.features?.includes('session_source_metadata'),
   );
-  const [sessionSource, setSessionSource] =
+  const [requestedSessionSource, setSessionSource] =
     useState<SidebarSessionSource>('default');
+  // With the tabs hidden there is no way back to Tasks, so never stay on Channels.
+  const sessionSource: SidebarSessionSource = hideSessionSourceTabs
+    ? 'default'
+    : requestedSessionSource;
   const selectedSessionSource = sourceMetadataEnabled
     ? sessionSource
     : undefined;
@@ -5077,7 +5087,7 @@ export function WebShellSidebar({
         {shouldRenderBrand && (
           <div className={styles.topRow}>
             {branding?.render ? (
-              branding.render()
+              branding.render({ collapsed })
             ) : (
               <>
                 <span className={styles.brandLogo} aria-hidden="true">
@@ -5189,7 +5199,7 @@ export function WebShellSidebar({
             onOpenChange={setCollapsedSessionsOpen}
             isCloseBlocked={isCollapsedCloseBlocked}
           >
-            {sourceMetadataEnabled && (
+            {sourceMetadataEnabled && !hideSessionSourceTabs && (
               <Tabs
                 className="px-2 pb-2"
                 value={sessionSource}
