@@ -54,6 +54,31 @@ uploads without ossutil's force-overwrite flag and supplies the server-side
 artifact Bucket, so the service rejects any later overwrite of a published
 object.
 
+## Local Publication
+
+When GitHub Actions is unavailable for this repository, the same publication can
+run from a maintainer machine:
+
+```bash
+node scripts/publish-meeting-qwen-artifacts-local.js --source-sha <40-char SHA> [--kind web|runtime] [--dry-run]
+```
+
+It performs the workflow's stages with the same guarantees: checkout of the
+exact source SHA in a temporary worktree, `npm ci` plus the clean-tree check for
+`web`, packaging with the same packagers, refusal of a partially populated
+prefix, an upload through `upload-aliyun-oss-assets.js --no-overwrite`, and a
+clean install from the public URLs. A prefix that is already fully published is
+only verified (manifest and checksums), never rewritten, so the command is safe
+to repeat.
+
+Credentials are never an account key. The operator's Aliyun CLI profile
+(`schedule-agent-local-release`) assumes `QwenLocalArtifactPublisherRole` for a
+900 second STS session. That role carries `QwenOssArtifactPublisherPolicy`, the
+same list/read/write-under-`npm/qwen-code/` policy as the GitHub Actions role,
+and only `ScheduleAgentLocalReleaseOperator` may assume it (allow-listed in
+`ScheduleAgentLocalReleaseAssumerPolicy`). The machine needs `aliyun` and
+`ossutil` 1.7.x on `PATH`.
+
 ## Out of Scope
 
 This release workflow does not invoke Playwright, a GitHub-hosted browser, or

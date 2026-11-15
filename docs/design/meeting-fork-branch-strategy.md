@@ -35,6 +35,9 @@ Meeting For You code.
 
 ## Where the product actually lives
 
+> Update (2026-11): the product is no longer one line. See "Branch lines in
+> use" below for what each deployed consumer actually pins.
+
 `meeting-agent/v0.22.2` forked from that same commit — the very next commit
 on that line is `github-actions[bot]`'s `chore(release): v0.22.2`, i.e. this
 is exactly the point the fork cut its own release line. Every commit on that
@@ -44,6 +47,21 @@ handling, web-shell session/UI fixes, etc. This is what frontend-web's
 `@qwen-code/{sdk,web-shell,webui}` dependencies are actually built from —
 see frontend-web's `package.json`, which pins an exact commit SHA (not a
 branch name) on this line.
+
+## Branch lines in use
+
+Consumers pin an exact commit SHA in an immutable OSS artifact URL, and the
+commits they pin do not all live on `meeting-agent/v0.22.2`:
+
+| Consumer                                          | Artifact kind | Pins                          | Lives on                                                                         |
+| ------------------------------------------------- | ------------- | ----------------------------- | -------------------------------------------------------------------------------- |
+| frontend-web (`@qwen-code/{sdk,web-shell,webui}`) | `web`         | the Web Shell sidebar line    | `fix/sidebar-archive-optimistic-and-loading-flicker` (PRs #15–#18 merge into it) |
+| schedule-agent (`@qwen-code/qwen-code`)           | `runtime`     | the durable-turn-barrier line | `feature/durable-turn-commit`                                                    |
+
+New Web Shell work starts from the current tip of the `web` line, and its PR
+targets that branch. frontend-web mounts `WebShellWithProviders` directly, so
+host-visible changes are Web Shell props (for example `sidebar.*`), not
+scripts injected into a served page.
 
 ## Rule for new product work
 
