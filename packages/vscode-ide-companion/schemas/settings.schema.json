@@ -1187,6 +1187,13 @@
                 "type": "string"
               }
             },
+            "autoApproveTools": {
+              "description": "Exact tool names that AUTO mode approves without the classifier and without manual confirmation, even when a permissions.ask rule matches. The ask rule still applies in the other approval modes. permissions.deny still wins.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "classifyAllShell": {
               "description": "Route ALL shell commands through the auto-mode classifier, including read-only commands that would otherwise be auto-approved. Provides defense-in-depth for production environments.",
               "type": "boolean",
