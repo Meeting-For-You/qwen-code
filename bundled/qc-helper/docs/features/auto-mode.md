@@ -185,6 +185,26 @@ manual approval.
 > `glob`, `list_directory`, etc.) are unaffected and still use the
 > fast-path allowlist.
 
+### Auto-approve trusted tools
+
+A `permissions.ask` rule forces manual confirmation in every mode that
+prompts, including Auto. To keep a tool asking in the plain "request
+approval" mode but let Auto sessions run it without a prompt or a classifier
+call, list its exact tool name in `autoApproveTools`:
+
+```json
+{
+  "permissions": {
+    "ask": ["mcp__crm__create_order"],
+    "autoMode": {
+      "autoApproveTools": ["mcp__crm__create_order"]
+    }
+  }
+}
+```
+
+`permissions.deny` still wins, and YOLO mode already skips confirmation.
+
 ## Reading the decision
 
 When the classifier blocks an action, the tool call fails with:

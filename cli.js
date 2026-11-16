@@ -7,8 +7,8 @@ import {
 } from "./chunks/chunk-BRVWYMKV.js";
 import {
   initCpuProfiler
-} from "./chunks/chunk-HZ2FQCJ6.js";
-import "./chunks/chunk-LAYEOJDW.js";
+} from "./chunks/chunk-SFMGEMLP.js";
+import "./chunks/chunk-5YSAPTCV.js";
 import {
   initStartupProfiler
 } from "./chunks/chunk-QILD6R27.js";
@@ -256,7 +256,7 @@ async function runMcpFastPath(rawArgv) {
   }
   const [{ default: yargsInstance }, { mcpCommand }] = await Promise.all([
     import("./chunks/yargs-6H2AUULL.js"),
-    import("./chunks/mcp-2YBPD5K7.js")
+    import("./chunks/mcp-MJS6CFQB.js")
   ]);
   const parser = yargsInstance([]).scriptName("qwen").command(mcpCommand).version(false).help().alias("h", "help").strict().strictCommands().demandCommand(1, "You need at least one command before continuing.").fail((message, error, yargs) => {
     writeStderrLine(message || error?.message || "Unknown argument error");
@@ -311,7 +311,7 @@ async function runCliEntry(rawArgv = process.argv.slice(2)) {
   if (managedUpdateVersion) {
     delete process.env["QWEN_CODE_MANAGED_NPM_UPDATE_VERSION"];
     delete process.env["QWEN_CODE_EXTERNAL_TOOL_GUARD_TOKEN"];
-    const { installManagedNpmUpdate } = await import("./chunks/managed-npm-update-IYO4THYO.js");
+    const { installManagedNpmUpdate } = await import("./chunks/managed-npm-update-OKUCPNSO.js");
     await installManagedNpmUpdate(managedUpdateVersion);
     return;
   }
@@ -325,7 +325,7 @@ async function runCliEntry(rawArgv = process.argv.slice(2)) {
     return;
   }
   if (route === "serve") {
-    const { tryRunServeFastPath } = await import("./chunks/fast-path-Y4AOIC36.js");
+    const { tryRunServeFastPath } = await import("./chunks/fast-path-VOTKINEX.js");
     if (await tryRunServeFastPath(argv)) {
       return;
     }
@@ -341,15 +341,15 @@ async function runCliEntry(rawArgv = process.argv.slice(2)) {
   ) ? await import("./chunks/acp-startup-profiler-GNYAL6LI.js") : void 0;
   acpStartupProfiler?.initializeAcpStartupProfiler();
   acpStartupProfiler?.markAcpStartup("geminiImportStart");
-  const { main } = await import("./chunks/gemini-ZD3OKRQI.js");
+  const { main } = await import("./chunks/gemini-BOVAEWXU.js");
   acpStartupProfiler?.markAcpStartup("geminiImportEnd");
   await main();
 }
 __name(runCliEntry, "runCliEntry");
 async function handleCriticalError(error) {
   const [{ FatalError }, { AlreadyReportedError }] = await Promise.all([
-    import("./chunks/deferred-core-runtime-S6FFXICA.js"),
-    import("./chunks/errors-DROJGEIV.js")
+    import("./chunks/deferred-core-runtime-MV3U4OKH.js"),
+    import("./chunks/errors-PMI2MQDK.js")
   ]);
   if (error instanceof FatalError) {
     let errorMessage = error.message;
