@@ -27,7 +27,7 @@ import {
 import { clearSessionCommits } from './destructive-commands.js';
 import { ApprovalMode } from '../config/config.js';
 import { ToolNames } from '../tools/tool-names.js';
-import type { Config } from '../config/config.js';
+import type { AutoModeSettings, Config } from '../config/config.js';
 import type { PermissionCheckContext } from './types.js';
 import { setGeminiMdFilename } from '../utils/memory-constants.js';
 
@@ -126,8 +126,12 @@ describe('isInSafeToolAllowlist', () => {
  * Build a stub Config whose WorkspaceContext considers `workspaceRoots`
  * as inside-the-workspace.
  */
-function makeConfig(workspaceRoots: string[]): Config {
+function makeConfig(
+  workspaceRoots: string[],
+  autoMode: AutoModeSettings = {},
+): Config {
   return {
+    getAutoModeSettings: () => autoMode,
     getWorkspaceContext: () => ({
       // Test fixture: roots and paths in this file use POSIX-style separators
       // regardless of OS, so hard-code '/' (not path.sep) for the prefix check.
@@ -1071,6 +1075,35 @@ describe('evaluateAutoMode — fast-path gating', () => {
       signal: new AbortController().signal,
     });
     expect(decision.via).toBe('fast-path:allowlist');
+  });
+
+  it('approves autoApproveTools outright even when an ask rule matched', async () => {
+    const tool = 'mcp__yilian__meeting_apply_changes';
+    const config = makeConfig([cwd], { autoApproveTools: [tool] });
+    const decision = await evaluateAutoMode({
+      ctx: { toolName: tool },
+      pmForcedAsk: true,
+      toolParams: {},
+      messages: [],
+      config,
+      signal: new AbortController().signal,
+    });
+    expect(decision.via).toBe('fast-path:allowlist');
+  });
+
+  it('keeps the ask-rule fallback for tools not in autoApproveTools', async () => {
+    const config = makeConfig([cwd], {
+      autoApproveTools: ['mcp__yilian__meeting_apply_changes'],
+    });
+    const decision = await evaluateAutoMode({
+      ctx: { toolName: 'mcp__yilian__meeting_create' },
+      pmForcedAsk: true,
+      toolParams: {},
+      messages: [],
+      config,
+      signal: new AbortController().signal,
+    });
+    expect(decision).toEqual({ via: 'fallback', reason: 'ask_rule' });
   });
 
   it('routes to manual fallback (skipping classifier) when pmForcedAsk=true', async () => {

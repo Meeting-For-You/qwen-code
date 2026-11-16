@@ -96,6 +96,19 @@ export function isInSafeToolAllowlist(toolName: string): boolean {
   return SAFE_TOOL_ALLOWLIST.has(toolName);
 }
 
+/**
+ * Returns true when the user opted this exact tool name into AUTO-mode
+ * auto-approval via `permissions.autoMode.autoApproveTools`.
+ */
+export function isAutoApprovedByUserSetting(
+  toolName: string,
+  config: Config,
+): boolean {
+  return (
+    config.getAutoModeSettings()?.autoApproveTools?.includes(toolName) === true
+  );
+}
+
 /** Edit / Write tool names eligible for the acceptEdits fast-path. */
 const EDIT_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
   ToolNames.EDIT,
@@ -685,6 +698,13 @@ export interface EvaluateAutoModeInput {
 export async function evaluateAutoMode(
   input: EvaluateAutoModeInput,
 ): Promise<AutoModeDecision> {
+  // L5.0: tools the user listed in `permissions.autoMode.autoApproveTools`
+  // are approved outright in AUTO, ahead of the ask-rule fallback below.
+  // L4 `deny` never reaches this function, so deny rules still win.
+  if (isAutoApprovedByUserSetting(input.ctx.toolName, input.config)) {
+    return { via: 'fast-path:allowlist' };
+  }
+
   // L5.1: edits within the workspace skip the classifier. We only short-
   // circuit when the user has NOT explicitly forced an ask rule; an
   // intrinsic L3 'ask' (e.g. EditTool's default) does not block the

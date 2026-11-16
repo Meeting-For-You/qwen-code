@@ -460,6 +460,16 @@ export interface AutoModeSettings {
   /** Environment / context lines injected into the classifier's system prompt. */
   environment?: string[];
   /**
+   * Exact tool names that AUTO mode approves without the classifier and
+   * without manual confirmation, even when a `permissions.ask` rule matches.
+   * The ask rule keeps applying in every other approval mode (default
+   * prompts, YOLO already skips). Use it for trusted tools (for example the
+   * write tools of a first-party MCP server) that should ask in the plain
+   * "request approval" mode but not interrupt a session that opted into
+   * AUTO. `permissions.deny` still wins.
+   */
+  autoApproveTools?: string[];
+  /**
    * When true, ALL shell commands are routed through the auto-mode
    * classifier, including read-only commands that would otherwise be
    * auto-approved. Default false.

@@ -2521,6 +2521,20 @@ const SETTINGS_SCHEMA = {
             showInDialog: false,
             mergeStrategy: MergeStrategy.UNION,
           },
+          autoApproveTools: {
+            type: 'array',
+            label: 'Auto Mode Auto-Approved Tools',
+            category: 'Tools',
+            requiresRestart: true,
+            default: undefined as string[] | undefined,
+            description:
+              'Exact tool names that AUTO mode approves without the ' +
+              'classifier and without manual confirmation, even when a ' +
+              'permissions.ask rule matches. The ask rule still applies in ' +
+              'the other approval modes. permissions.deny still wins.',
+            showInDialog: false,
+            mergeStrategy: MergeStrategy.UNION,
+          },
           classifyAllShell: {
             type: 'boolean',
             label: 'Classify All Shell Commands',
