@@ -9408,9 +9408,11 @@ export function createAcpSessionBridge(opts: BridgeOptions): AcpSessionBridge {
             deadlineTimer = undefined;
           }
           const durableTurnCommit = opts.onDurableTurnCommit;
-          const requiresDurableCommit =
-            durableTurnCommit !== undefined &&
-            promptResult.stopReason !== 'cancelled';
+          // 取消的 turn 同样要 durable commit：用户取消（含网关回收 runtime 前取消
+          // 等待输入的 turn）之后，已经产生的回复和工具调用必须随快照保留，
+          // 否则重新打开会话时这一轮整个消失。取消没有 branchPoint，网关用
+          // transcriptTailUuid 作为快照边界。
+          const requiresDurableCommit = durableTurnCommit !== undefined;
           if (durableTurnCommit && requiresDurableCommit) {
             try {
               await commitDurableTurn(
