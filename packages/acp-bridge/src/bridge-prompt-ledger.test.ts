@@ -542,6 +542,41 @@ describe('durable turn completion barrier', () => {
     }
   });
 
+  it('commits a cancelled turn only after the transcript tail stops moving', async () => {
+    const requests: DurableTurnCommitRequestV1[] = [];
+    const handle = makeChannel({
+      promptImpl: () => ({ stopReason: 'cancelled' as const }),
+    });
+    const ledger = recordingLedger();
+    // The cancelled tool result lands after the prompt resolved, so the tail
+    // moves twice before it settles.
+    const tails = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ];
+    const settled = '33333333-3333-4333-8333-333333333333';
+    let reads = 0;
+    ledger.sink.transcriptTailUuid = () => tails[reads++] ?? settled;
+    const bridge = makeBridge({
+      channelFactory: async () => handle.channel,
+      promptLedger: ledger.sink,
+      onDurableTurnCommit: async (request) => {
+        requests.push(request);
+      },
+    });
+    try {
+      const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
+      await bridge.sendPrompt(session.sessionId, {
+        sessionId: session.sessionId,
+        prompt: [{ type: 'text', text: 'cancel while a tool result is pending' }],
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.transcriptTailUuid).toBe(settled);
+    } finally {
+      await bridge.shutdown();
+    }
+  });
+
   it('does not commit an ACP error', async () => {
     const onDurableTurnCommit = vi.fn(async () => undefined);
     const handle = makeChannel({
