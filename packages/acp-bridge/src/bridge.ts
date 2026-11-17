@@ -2232,21 +2232,60 @@ function durableTurnCommitId(
     .digest('hex')}`;
 }
 
+/**
+ * A cancelled prompt resolves while the tool runner is still unwinding: the
+ * cancelled tool calls append their `tool_result` records to the transcript a
+ * few milliseconds AFTER the prompt result is returned. A tail read at that
+ * instant would sit before those records, and a snapshot frozen there would
+ * hold an assistant tool call with no result (the next model request is then
+ * rejected). So a cancelled turn commits only once the transcript tail has
+ * stopped moving for `CANCELLED_TAIL_QUIET_MS`, bounded by
+ * `CANCELLED_TAIL_SETTLE_MAX_MS`. Normal completions need no wait: their
+ * records are all written before the prompt resolves.
+ */
+const CANCELLED_TAIL_POLL_MS = 50;
+const CANCELLED_TAIL_QUIET_MS = 200;
+const CANCELLED_TAIL_SETTLE_MAX_MS = 3000;
+
+async function readSettledTranscriptTailUuid(
+  entry: SessionEntry,
+  stopReason: string | undefined,
+): Promise<string | undefined> {
+  const read = () => entry.promptLedger?.transcriptTailUuid?.(entry.sessionId);
+  let tail = read();
+  if (stopReason !== 'cancelled') return tail;
+  const startedAt = Date.now();
+  let stableSince = startedAt;
+  while (
+    Date.now() - stableSince < CANCELLED_TAIL_QUIET_MS &&
+    Date.now() - startedAt < CANCELLED_TAIL_SETTLE_MAX_MS
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, CANCELLED_TAIL_POLL_MS));
+    const next = read();
+    if (next !== tail) {
+      tail = next;
+      stableSince = Date.now();
+    }
+  }
+  return tail;
+}
+
 async function commitDurableTurn(
   entry: SessionEntry,
   pendingEntry: PendingPromptEntry,
   result: { stopReason?: string; [k: string]: unknown },
   handler: DurableTurnCommitHandler,
 ): Promise<void> {
-  const completedAtMs = Date.now();
   let transcriptTailUuid: string | undefined;
   try {
-    transcriptTailUuid = entry.promptLedger?.transcriptTailUuid?.(
-      entry.sessionId,
+    transcriptTailUuid = await readSettledTranscriptTailUuid(
+      entry,
+      result.stopReason,
     );
   } catch (error) {
     throw new DurableTurnCommitError(error);
   }
+  const completedAtMs = Date.now();
   if (
     transcriptTailUuid === undefined ||
     !CHAT_RECORD_UUID_RE.test(transcriptTailUuid)
