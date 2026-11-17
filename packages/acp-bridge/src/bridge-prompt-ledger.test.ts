@@ -504,22 +504,51 @@ describe('durable turn completion barrier', () => {
     }
   });
 
-  it.each([
-    {
-      name: 'cancelled completion',
+  it('commits a cancelled completion without a branch point', async () => {
+    const requests: DurableTurnCommitRequestV1[] = [];
+    const handle = makeChannel({
       promptImpl: () => ({ stopReason: 'cancelled' as const }),
-      rejects: false,
-    },
-    {
-      name: 'ACP error',
+    });
+    const ledger = recordingLedger();
+    ledger.sink.transcriptTailUuid = () =>
+      '11111111-1111-4111-8111-111111111111';
+    const bridge = makeBridge({
+      channelFactory: async () => handle.channel,
+      promptLedger: ledger.sink,
+      onDurableTurnCommit: async (request) => {
+        requests.push(request);
+      },
+    });
+    try {
+      const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
+      await expect(
+        bridge.sendPrompt(session.sessionId, {
+          sessionId: session.sessionId,
+          prompt: [{ type: 'text', text: 'cancelled but durable' }],
+        }),
+      ).resolves.toMatchObject({ stopReason: 'cancelled' });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatchObject({
+        sessionId: session.sessionId,
+        stopReason: 'cancelled',
+        transcriptTailUuid: '11111111-1111-4111-8111-111111111111',
+      });
+      expect(requests[0]?.branchPoint).toBeUndefined();
+      expect(terminalRecords(ledger.records).at(-1)).toMatchObject({
+        terminal: 'cancelled',
+      });
+    } finally {
+      await bridge.shutdown();
+    }
+  });
+
+  it('does not commit an ACP error', async () => {
+    const onDurableTurnCommit = vi.fn(async () => undefined);
+    const handle = makeChannel({
       promptImpl: () => {
         throw new Error('provider failed');
       },
-      rejects: true,
-    },
-  ])('does not commit a $name', async ({ promptImpl, rejects }) => {
-    const onDurableTurnCommit = vi.fn(async () => undefined);
-    const handle = makeChannel({ promptImpl });
+    });
     const ledger = recordingLedger();
     ledger.sink.transcriptTailUuid = () =>
       '11111111-1111-4111-8111-111111111111';
@@ -530,15 +559,12 @@ describe('durable turn completion barrier', () => {
     });
     try {
       const session = await bridge.spawnOrAttach({ workspaceCwd: WS_A });
-      const prompt = bridge.sendPrompt(session.sessionId, {
-        sessionId: session.sessionId,
-        prompt: [{ type: 'text', text: 'do not commit' }],
-      });
-      if (rejects) await expect(prompt).rejects.toThrow();
-      else
-        await expect(prompt).resolves.toMatchObject({
-          stopReason: 'cancelled',
-        });
+      await expect(
+        bridge.sendPrompt(session.sessionId, {
+          sessionId: session.sessionId,
+          prompt: [{ type: 'text', text: 'do not commit' }],
+        }),
+      ).rejects.toThrow();
       expect(onDurableTurnCommit).not.toHaveBeenCalled();
     } finally {
       await bridge.shutdown();

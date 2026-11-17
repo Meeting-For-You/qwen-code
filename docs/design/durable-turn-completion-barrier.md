@@ -11,11 +11,13 @@ prompt starts mutating the session.
 ## Boundary
 
 `BridgeOptions.onDurableTurnCommit` is the only bridge-level seam. It runs for
-a successful, non-cancelled prompt after the ACP response and transcript tail
-are available. Before invoking it, the bridge synchronously appends the
-`completed` prompt-ledger record. The request therefore names both immutable
-pieces of local commit evidence: the completed ledger record and the current
-transcript tail UUID.
+a prompt that the agent settled normally (`end_turn` or `cancelled`) after the
+ACP response and transcript tail are available. A cancelled prompt commits too,
+so what it already produced survives a runtime release; it carries no
+`branchPoint`. ACP errors never commit. Before invoking it, the bridge
+synchronously appends the terminal prompt-ledger record (`completed` or
+`cancelled`). The request therefore names both immutable pieces of local commit
+evidence: the terminal ledger record and the current transcript tail UUID.
 
 The bridge awaits the handler before it:
 
