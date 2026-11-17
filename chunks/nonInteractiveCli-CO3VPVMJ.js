@@ -1,15 +1,16 @@
 // Force strict mode and setup for ESM
 "use strict";
 import {
-  JsonOutputAdapter
-} from "./chunk-ZNY6YK3G.js";
-import {
-  StreamJsonOutputAdapter
-} from "./chunk-BK47ASM7.js";
-import "./chunk-CZSA5LNS.js";
-import {
-  validateAuthMethod
-} from "./chunk-GBCB24VR.js";
+  TurnInterruptedError,
+  runNonInteractive,
+  skipHeadlessLoopSentinel
+} from "./chunk-C2JSXZJI.js";
+import "./chunk-TRZTNIQ6.js";
+import "./chunk-TDNVS5YO.js";
+import "./chunk-WKFGFKQZ.js";
+import "./chunk-AELOR5TS.js";
+import "./chunk-GAGATBZR.js";
+import "./chunk-YDNVCQFA.js";
 import "./chunk-NYX53SV4.js";
 import "./chunk-7SQLHJ3F.js";
 import "./chunk-X6USQL7T.js";
@@ -20,7 +21,7 @@ import "./chunk-EKTCKZV5.js";
 import "./chunk-CME66FCZ.js";
 import "./chunk-YAF2MQZ6.js";
 import "./chunk-QFCDF5PL.js";
-import "./chunk-ACXPRD7K.js";
+import "./chunk-DAUWE5EB.js";
 import "./chunk-6H67XLET.js";
 import "./chunk-EBL2BCIX.js";
 import "./chunk-5PWFG7BC.js";
@@ -37,8 +38,8 @@ import "./chunk-RXFQM6FQ.js";
 import "./chunk-ZEZKIS2K.js";
 import "./chunk-XRSOI3DL.js";
 import "./chunk-YTDVNSUQ.js";
-import "./chunk-BZ3RNBGO.js";
-import "./chunk-WRAAJFOV.js";
+import "./chunk-V6L2LHWS.js";
+import "./chunk-XFFYX5QQ.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";
 import "./chunk-D7KQSGOJ.js";
@@ -169,82 +170,17 @@ import "./chunk-PDQGMSZK.js";
 import "./chunk-UTLCH2FK.js";
 import "./chunk-UHQFIS7N.js";
 import "./chunk-6RGLNVHU.js";
-import {
-  runExitCleanup
-} from "./chunk-4DTDLD6D.js";
-import {
-  writeStderrLine
-} from "./chunk-KGJGEEVR.js";
+import "./chunk-4DTDLD6D.js";
+import "./chunk-KGJGEEVR.js";
 import "./chunk-75DOP5OR.js";
 import "./chunk-DMTGGOSA.js";
 import "./chunk-YQ3U5MUC.js";
 import "./chunk-AMDSOFFV.js";
 import "./chunk-TBWQLLFO.js";
-import {
-  init_esbuild_shims
-} from "./chunk-5O2XNYP6.js";
-import {
-  __name
-} from "./chunk-J2S4EL5Y.js";
-
-// packages/cli/src/validateNonInterActiveAuth.ts
-init_esbuild_shims();
-async function validateNonInteractiveAuth(useExternalAuth, nonInteractiveConfig, settings) {
-  try {
-    const authType = nonInteractiveConfig.getModelsConfig().getCurrentAuthType();
-    if (!authType) {
-      throw new Error(
-        "No auth type is selected. Please configure an auth type (e.g. via settings or `--auth-type`) before running in non-interactive mode."
-      );
-    }
-    const resolvedAuthType = authType;
-    const enforcedType = settings.merged.security?.auth?.enforcedType;
-    if (enforcedType && enforcedType !== resolvedAuthType) {
-      const message = `The configured auth type is ${enforcedType}, but the current auth type is ${resolvedAuthType}. Please re-authenticate with the correct type.`;
-      throw new Error(message);
-    }
-    if (!useExternalAuth) {
-      const err = validateAuthMethod(resolvedAuthType, nonInteractiveConfig);
-      if (err != null) {
-        throw new Error(err);
-      }
-    }
-    await nonInteractiveConfig.refreshAuth(resolvedAuthType);
-    return nonInteractiveConfig;
-  } catch (error) {
-    const outputFormat = nonInteractiveConfig.getOutputFormat();
-    if (outputFormat === "json" /* JSON */ || outputFormat === "stream-json" /* STREAM_JSON */) {
-      let adapter;
-      if (outputFormat === "json" /* JSON */) {
-        adapter = new JsonOutputAdapter(nonInteractiveConfig);
-      } else {
-        adapter = new StreamJsonOutputAdapter(
-          nonInteractiveConfig,
-          nonInteractiveConfig.getIncludePartialMessages()
-        );
-      }
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      adapter.emitResult({
-        isError: true,
-        errorMessage,
-        durationMs: 0,
-        apiDurationMs: 0,
-        numTurns: 0,
-        usage: void 0
-      });
-      await runExitCleanup();
-      process.exit(1);
-    }
-    writeStderrLine(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
-__name(validateNonInteractiveAuth, "validateNonInteractiveAuth");
+import "./chunk-5O2XNYP6.js";
+import "./chunk-J2S4EL5Y.js";
 export {
-  validateNonInteractiveAuth
+  TurnInterruptedError,
+  runNonInteractive,
+  skipHeadlessLoopSentinel
 };
-/**
- * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
- */

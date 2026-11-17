@@ -4887,16 +4887,37 @@ function durableTurnCommitId(input) {
   return `sha256:${createHash2("sha256").update(JSON.stringify(input)).digest("hex")}`;
 }
 __name(durableTurnCommitId, "durableTurnCommitId");
+var CANCELLED_TAIL_POLL_MS = 50;
+var CANCELLED_TAIL_QUIET_MS = 200;
+var CANCELLED_TAIL_SETTLE_MAX_MS = 3e3;
+async function readSettledTranscriptTailUuid(entry, stopReason) {
+  const read = /* @__PURE__ */ __name(() => entry.promptLedger?.transcriptTailUuid?.(entry.sessionId), "read");
+  let tail = read();
+  if (stopReason !== "cancelled") return tail;
+  const startedAt = Date.now();
+  let stableSince = startedAt;
+  while (Date.now() - stableSince < CANCELLED_TAIL_QUIET_MS && Date.now() - startedAt < CANCELLED_TAIL_SETTLE_MAX_MS) {
+    await new Promise((resolve) => setTimeout(resolve, CANCELLED_TAIL_POLL_MS));
+    const next = read();
+    if (next !== tail) {
+      tail = next;
+      stableSince = Date.now();
+    }
+  }
+  return tail;
+}
+__name(readSettledTranscriptTailUuid, "readSettledTranscriptTailUuid");
 async function commitDurableTurn(entry, pendingEntry, result, handler) {
-  const completedAtMs = Date.now();
   let transcriptTailUuid;
   try {
-    transcriptTailUuid = entry.promptLedger?.transcriptTailUuid?.(
-      entry.sessionId
+    transcriptTailUuid = await readSettledTranscriptTailUuid(
+      entry,
+      result.stopReason
     );
   } catch (error) {
     throw new DurableTurnCommitError(error);
   }
+  const completedAtMs = Date.now();
   if (transcriptTailUuid === void 0 || !CHAT_RECORD_UUID_RE.test(transcriptTailUuid)) {
     throw new DurableTurnCommitError(
       new Error("Transcript tail UUID is unavailable after prompt completion")

@@ -8,7 +8,7 @@ import {
   staleArgsWarning,
   validateAuthMethod,
   writeSkillArgs
-} from "./chunk-GBCB24VR.js";
+} from "./chunk-YDNVCQFA.js";
 import {
   isKittyProtocolEnabled
 } from "./chunk-NYX53SV4.js";
@@ -75,7 +75,7 @@ import {
   getExtendedSystemInfo,
   getGitVersion,
   getNpmVersion
-} from "./chunk-BZ3RNBGO.js";
+} from "./chunk-V6L2LHWS.js";
 import {
   isInlineModelOverrideAllowed,
   parseAcpModelOption

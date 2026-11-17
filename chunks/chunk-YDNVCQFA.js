@@ -2,7 +2,7 @@
 "use strict";
 import {
   serveCommand
-} from "./chunk-ACXPRD7K.js";
+} from "./chunk-DAUWE5EB.js";
 import {
   listCommand
 } from "./chunk-EBL2BCIX.js";
@@ -39,7 +39,7 @@ import {
 } from "./chunk-YTDVNSUQ.js";
 import {
   CLI_VERSION
-} from "./chunk-WRAAJFOV.js";
+} from "./chunk-XFFYX5QQ.js";
 import {
   collectProviderModelsForProtocol,
   getAuthTypeFromEnv,

@@ -6,7 +6,7 @@ import {
 
 // packages/cli/src/generated/git-commit.ts
 init_esbuild_shims();
-var GIT_COMMIT_INFO = "1a47eab197";
+var GIT_COMMIT_INFO = "6b1da5b858";
 var CLI_VERSION = "0.22.2";
 
 export {

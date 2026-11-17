@@ -1,18 +1,16 @@
 // Force strict mode and setup for ESM
 "use strict";
 import {
-  ExistingSessionScheduledTaskCreateError,
-  createScheduledTaskWithExistingSession,
-  registerScheduledTasksRoutes,
-  registerWorkspaceQualifiedScheduledTasksRoutes,
-  scheduledTaskSessionName
-} from "./chunk-L33SU77A.js";
-import "./chunk-4CMJKUND.js";
-import "./chunk-ZEZKIS2K.js";
+  WorkspaceGenerationClosedError,
+  createSingleWorkspaceRegistry,
+  createWorkspaceGenerationGuard,
+  createWorkspaceRegistry,
+  createWorkspaceSessionOwnerIndex
+} from "./chunk-XTZT3JPV.js";
 import "./chunk-NYWWQ437.js";
 import "./chunk-OIBUG24X.js";
 import "./chunk-4JRM2BSM.js";
-import "./chunk-TFGCXTGG.js";
+import "./chunk-JIG6DA6Q.js";
 import "./chunk-YM2DV3KP.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";
@@ -23,7 +21,6 @@ import "./chunk-JHS74YAB.js";
 import "./chunk-OZ6KS6KW.js";
 import "./chunk-Q43FL4BM.js";
 import "./chunk-6PLDPT2C.js";
-import "./chunk-RKFGE7JH.js";
 import "./chunk-UDG5EZJI.js";
 import "./chunk-3VUENPWF.js";
 import "./chunk-M5GB774H.js";
@@ -112,7 +109,6 @@ import "./chunk-AQ37AY7B.js";
 import "./chunk-PDQGMSZK.js";
 import "./chunk-UTLCH2FK.js";
 import "./chunk-UHQFIS7N.js";
-import "./chunk-KGJGEEVR.js";
 import "./chunk-75DOP5OR.js";
 import "./chunk-DMTGGOSA.js";
 import "./chunk-YQ3U5MUC.js";
@@ -121,9 +117,9 @@ import "./chunk-TBWQLLFO.js";
 import "./chunk-5O2XNYP6.js";
 import "./chunk-J2S4EL5Y.js";
 export {
-  ExistingSessionScheduledTaskCreateError,
-  createScheduledTaskWithExistingSession,
-  registerScheduledTasksRoutes,
-  registerWorkspaceQualifiedScheduledTasksRoutes,
-  scheduledTaskSessionName
+  WorkspaceGenerationClosedError,
+  createSingleWorkspaceRegistry,
+  createWorkspaceGenerationGuard,
+  createWorkspaceRegistry,
+  createWorkspaceSessionOwnerIndex
 };

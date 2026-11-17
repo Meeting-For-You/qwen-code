@@ -444,7 +444,7 @@ var serveCommand = {
     delete process.env[EXTERNAL_TOOL_GUARD_TOKEN_ENV];
     const openWithAuth = argv["open-with-auth"];
     const open = argv.open || openWithAuth;
-    const { runQwenServe } = await import("./run-qwen-serve-64ZBRUZJ.js");
+    const { runQwenServe } = await import("./run-qwen-serve-ONM5PWG3.js");
     try {
       const serveOptions = {
         port: argv.port,

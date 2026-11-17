@@ -3,7 +3,7 @@
 import {
   getGitVersion,
   getNpmVersion
-} from "./chunk-BZ3RNBGO.js";
+} from "./chunk-V6L2LHWS.js";
 import {
   buildEnvStatusFromEnv,
   snapshotProcessEnv

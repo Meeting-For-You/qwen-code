@@ -2,7 +2,7 @@
 "use strict";
 import {
   appEvents
-} from "./chunk-GBCB24VR.js";
+} from "./chunk-YDNVCQFA.js";
 import {
   assembleMcpServers,
   getPendingGatedMcpServers,

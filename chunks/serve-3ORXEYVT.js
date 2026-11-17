@@ -1,25 +1,27 @@
 // Force strict mode and setup for ESM
 "use strict";
 import {
-  createTotalSessionAdmissionController
-} from "./chunk-7PZ3DWMF.js";
-import "./chunk-OIBUG24X.js";
-import "./chunk-4JRM2BSM.js";
-import "./chunk-TFGCXTGG.js";
-import "./chunk-YM2DV3KP.js";
+  maybeOpenWebShellBrowser,
+  serveCommand
+} from "./chunk-DAUWE5EB.js";
+import "./chunk-6H67XLET.js";
+import "./chunk-UXEO7E3V.js";
 import "./chunk-7U5G6JXI.js";
 import "./chunk-WCCLLK7X.js";
-import "./chunk-OCPBI7J5.js";
-import "./chunk-RUGNCYNO.js";
-import "./chunk-H72BQNM3.js";
-import "./chunk-JHS74YAB.js";
-import "./chunk-OZ6KS6KW.js";
-import "./chunk-Q43FL4BM.js";
-import "./chunk-6PLDPT2C.js";
-import "./chunk-UDG5EZJI.js";
+import "./chunk-ALMR3E6Q.js";
 import "./chunk-3VUENPWF.js";
-import "./chunk-M5GB774H.js";
-import "./chunk-IW6RQPQB.js";
+import "./chunk-A6J3RW5E.js";
+import "./chunk-RKUWKYED.js";
+import "./chunk-KNHB7UP7.js";
+import "./chunk-GOXKNSDZ.js";
+import "./chunk-IDS7MSUP.js";
+import "./chunk-LDP5OD6N.js";
+import "./chunk-5EJZE3FP.js";
+import "./chunk-SFKHUHLQ.js";
+import "./chunk-5PA6UEYA.js";
+import "./chunk-BPTFCCRA.js";
+import "./chunk-NPQ5ZKRP.js";
+import "./chunk-MR3PXB6E.js";
 import "./chunk-LDRQJR24.js";
 import "./chunk-BLRMM2TB.js";
 import "./chunk-CQH5KTKC.js";
@@ -104,6 +106,7 @@ import "./chunk-AQ37AY7B.js";
 import "./chunk-PDQGMSZK.js";
 import "./chunk-UTLCH2FK.js";
 import "./chunk-UHQFIS7N.js";
+import "./chunk-KGJGEEVR.js";
 import "./chunk-75DOP5OR.js";
 import "./chunk-DMTGGOSA.js";
 import "./chunk-YQ3U5MUC.js";
@@ -112,5 +115,6 @@ import "./chunk-TBWQLLFO.js";
 import "./chunk-5O2XNYP6.js";
 import "./chunk-J2S4EL5Y.js";
 export {
-  createTotalSessionAdmissionController
+  maybeOpenWebShellBrowser,
+  serveCommand
 };

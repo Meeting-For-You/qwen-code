@@ -2,7 +2,7 @@
 "use strict";
 import {
   BaseJsonOutputAdapter
-} from "./chunk-BK47ASM7.js";
+} from "./chunk-AELOR5TS.js";
 import {
   observeHeadlessJsonToolResultWire
 } from "./chunk-PROASXZN.js";
